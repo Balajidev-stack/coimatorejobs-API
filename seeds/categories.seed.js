@@ -1025,70 +1025,24 @@ for (const role of rolesData) {
 // ----------------- SEED FUNCTION -----------------
 async function seed() {
     try {
-        console.log('🚀 Starting enhanced seeding process...');
+        console.log('Starting enhanced seeding process...');
 
-        // Clear existing data
-        await Industry.deleteMany({});
-        await FunctionalArea.deleteMany({});
-        await Role.deleteMany({});
-        await Location.deleteMany({});
-        await Skill.deleteMany({});
-        console.log('✅ Cleared existing data');
+        const shouldReset = process.env.SEED_RESET === 'true' || process.argv.includes('--reset');
 
-        // 1. Seed Industries
-        const industriesMap = {};
-        for (const ind of industriesData) {
-            ind.slug = generateSlug(ind.name);
-            const saved = await Industry.create(ind);
-            industriesMap[ind.name] = saved._id;
-        }
-        console.log(`✅ Seeded ${Object.keys(industriesMap).length} industries`);
-
-        // 2. Seed Functional Areas
-        const functionalAreasMap = {};
-
-        // Global functional areas first
-        for (const fa of globalFunctionalAreasData) {
-            fa.slug = generateSlug(fa.name);
-            fa.industry = null;
-            fa.isGlobal = true;
-
-            const saved = await FunctionalArea.create(fa);
-            functionalAreasMap[fa.name] = { id: saved._id, isGlobal: true };
+        if (shouldReset) {
+            await Industry.deleteMany({});
+            await FunctionalArea.deleteMany({});
+            await Role.deleteMany({});
+            await Location.deleteMany({});
+            await Skill.deleteMany({});
+            console.log('Cleared existing data (--reset mode)');
+        } else {
+            console.log('Safe mode enabled: upsert only (no delete)');
         }
 
-        // Industry-specific functional areas
-        for (const fa of industrySpecificFunctionalAreasData) {
-            const industryId = industriesMap[fa.industryName];
-            if (!industryId) throw new Error(`❌ Industry not found for Functional Area "${fa.name}"`);
-
-            fa.slug = generateSlug(fa.name);
-            fa.industry = industryId;
-            fa.isGlobal = false;
-
-            const saved = await FunctionalArea.create(fa);
-            functionalAreasMap[fa.name] = { id: saved._id, isGlobal: false };
-        }
-
-        console.log(`✅ Seeded ${functionalAreasData.length} functional areas`);
-
-        // 3. Seed Roles
-
-        // Deduplicate roles by (name + functionalAreaName)
-        const roleKeySet = new Set();
-        const dedupedRoles = [];
-        for (const role of rolesData) {
-            const key = `${role.name.toLowerCase()}__${role.functionalAreaName}`;
-            if (!roleKeySet.has(key)) {
-                roleKeySet.add(key);
-                dedupedRoles.push(role);
-            }
-        }
-        console.log(`🧹 Deduped roles: ${rolesData.length} → ${dedupedRoles.length}`);
-
-        // Utility to generate unique slug for roles or skills
+        // Utility to generate unique slug for a list (locations/skills can repeat names)
         function generateUniqueSlug(name, slugSet) {
-            let baseSlug = generateSlug(name);
+            const baseSlug = generateSlug(name);
             let slug = baseSlug;
             let counter = 1;
             while (slugSet.has(slug)) {
@@ -1099,78 +1053,179 @@ async function seed() {
             return slug;
         }
 
-        const roleSlugSet = new Set();
-        const roleCounts = { common: 0, industrySpecific: 0 };
+        // 1. Seed Industries
+        const industriesMap = {};
+        for (const ind of industriesData) {
+            const slug = generateSlug(ind.name);
+            const saved = await Industry.findOneAndUpdate(
+                { slug },
+                {
+                    $set: {
+                        name: ind.name,
+                        slug,
+                        keywords: ind.keywords || [],
+                        isActive: true,
+                    },
+                },
+                { upsert: true, new: true, setDefaultsOnInsert: true }
+            );
+            industriesMap[ind.name] = saved._id;
+        }
+        console.log(`Seeded ${Object.keys(industriesMap).length} industries`);
 
+        // 2. Seed Functional Areas
+        const functionalAreasMap = {};
+
+        for (const fa of globalFunctionalAreasData) {
+            const saved = await FunctionalArea.findOneAndUpdate(
+                { name: fa.name, industry: null },
+                {
+                    $set: {
+                        name: fa.name,
+                        slug: generateSlug(fa.name),
+                        industry: null,
+                        isGlobal: true,
+                        keywords: fa.keywords || [],
+                        isActive: true,
+                    },
+                },
+                { upsert: true, new: true, setDefaultsOnInsert: true }
+            );
+            functionalAreasMap[fa.name] = { id: saved._id, isGlobal: true };
+        }
+
+        for (const fa of industrySpecificFunctionalAreasData) {
+            const industryId = industriesMap[fa.industryName];
+            if (!industryId) throw new Error(`Industry not found for Functional Area "${fa.name}"`);
+
+            const saved = await FunctionalArea.findOneAndUpdate(
+                { name: fa.name, industry: industryId },
+                {
+                    $set: {
+                        name: fa.name,
+                        slug: generateSlug(fa.name),
+                        industry: industryId,
+                        isGlobal: false,
+                        keywords: fa.keywords || [],
+                        isActive: true,
+                    },
+                },
+                { upsert: true, new: true, setDefaultsOnInsert: true }
+            );
+            functionalAreasMap[fa.name] = { id: saved._id, isGlobal: false };
+        }
+
+        console.log(`Seeded ${functionalAreasData.length} functional areas`);
+
+        // 3. Seed Roles (dedupe by role+functionalArea)
+        const roleKeySet = new Set();
+        const dedupedRoles = [];
+        for (const role of rolesData) {
+            const key = `${role.name.toLowerCase()}__${role.functionalAreaName}`;
+            if (!roleKeySet.has(key)) {
+                roleKeySet.add(key);
+                dedupedRoles.push(role);
+            }
+        }
+        console.log(`Deduped roles: ${rolesData.length} -> ${dedupedRoles.length}`);
+
+        const roleCounts = { common: 0, industrySpecific: 0 };
         for (const role of dedupedRoles) {
             const faInfo = functionalAreasMap[role.functionalAreaName];
-            if (!faInfo) throw new Error(`❌ Functional Area not found for role "${role.name}"`);
+            if (!faInfo) throw new Error(`Functional Area not found for role "${role.name}"`);
 
-            role.slug = generateUniqueSlug(role.name, roleSlugSet);
-            role.functionalArea = faInfo.id;
-            role.isGlobal = role.isGlobal || faInfo.isGlobal;
+            const slug = generateSlug(role.name);
+            const isGlobal = role.isGlobal || faInfo.isGlobal;
 
-            await Role.create(role);
+            await Role.findOneAndUpdate(
+                { slug, functionalArea: faInfo.id },
+                {
+                    $set: {
+                        name: role.name,
+                        slug,
+                        functionalArea: faInfo.id,
+                        isGlobal,
+                        keywords: role.keywords || [],
+                        alternativeNames: role.alternativeNames || [],
+                        isActive: true,
+                    },
+                },
+                { upsert: true, new: true, setDefaultsOnInsert: true }
+            );
 
-            if (role.isGlobal) roleCounts.common++;
+            if (isGlobal) roleCounts.common++;
             else roleCounts.industrySpecific++;
         }
-        console.log(`✅ Seeded ${dedupedRoles.length} roles (${roleCounts.common} common, ${roleCounts.industrySpecific} industry-specific)`);
+        console.log(`Seeded ${dedupedRoles.length} roles (${roleCounts.common} common, ${roleCounts.industrySpecific} industry-specific)`);
 
         // 4. Seed Locations
         const locationSlugSet = new Set();
         for (const loc of locationsData) {
-            loc.slug = generateUniqueSlug(loc.name, locationSlugSet);
-            await Location.create(loc);
+            const slug = generateUniqueSlug(loc.name, locationSlugSet);
+            await Location.findOneAndUpdate(
+                { name: loc.name },
+                {
+                    $set: {
+                        name: loc.name,
+                        slug,
+                        state: loc.state || '',
+                        keywords: loc.keywords || [],
+                        isActive: true,
+                    },
+                },
+                { upsert: true, new: true, setDefaultsOnInsert: true }
+            );
         }
-        console.log(`✅ Seeded ${locationsData.length} locations`);
+        console.log(`Seeded ${locationsData.length} locations`);
 
         // 5. Seed Skills
         const skillSlugSet = new Set();
         for (const skill of skillsData) {
-            skill.slug = generateUniqueSlug(skill.name, skillSlugSet);
-            await Skill.create(skill);
+            const slug = generateUniqueSlug(skill.name, skillSlugSet);
+            await Skill.findOneAndUpdate(
+                { name: skill.name },
+                {
+                    $set: {
+                        name: skill.name,
+                        slug,
+                        category: skill.category || '',
+                        keywords: skill.keywords || [],
+                        isActive: true,
+                    },
+                },
+                { upsert: true, new: true, setDefaultsOnInsert: true }
+            );
         }
-        console.log(`✅ Seeded ${skillsData.length} skills`);
+        console.log(`Seeded ${skillsData.length} skills`);
 
         // 6. Verification Report
-        console.log('\n📊 Verification Report:');
+        console.log('\nVerification Report:');
         for (const industryName in industriesMap) {
             const industryId = industriesMap[industryName];
 
             const functionalAreasCount = await FunctionalArea.countDocuments({
-                $or: [
-                    { industry: industryId },
-                    { isGlobal: true }
-                ]
+                $or: [{ industry: industryId }, { isGlobal: true }],
             });
 
             const rolesCount = await Role.countDocuments({
                 functionalArea: {
                     $in: await FunctionalArea.find({
-                        $or: [
-                            { industry: industryId },
-                            { isGlobal: true }
-                        ]
-                    }).distinct('_id')
-                }
+                        $or: [{ industry: industryId }, { isGlobal: true }],
+                    }).distinct('_id'),
+                },
             });
 
             console.log(`   ${industryName}: ${functionalAreasCount} functional areas, ${rolesCount} roles`);
         }
 
-        console.log('\n🎉 Enhanced seeding complete successfully!');
-        console.log('✅ All industries now have functional areas and roles');
-        console.log('✅ Common roles (Manager, Executive, etc.) are available in all industries');
-        console.log('✅ Seniority levels (Junior, Senior, Lead) are included');
-        console.log('✅ All major job portals roles are covered');
+        console.log('\nEnhanced seeding complete successfully!');
+        console.log('All industries now have functional areas and roles');
 
         process.exit(0);
-
     } catch (error) {
-        console.error('❌ Seeding failed:', error);
+        console.error('Seeding failed:', error);
         process.exit(1);
     }
 }
-
 seed();
+

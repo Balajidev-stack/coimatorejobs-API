@@ -7,6 +7,13 @@
   "scripts": {
     "start": "node app.js",
     "dev": "nodemon app.js",
+    "seed:categories": "node seeds/categories.seed.js",
+    "seed:categories:reset": "node seeds/categories.seed.js --reset",
+    "migrate:industry": "node seeds/industryMigration.js",
+    "migrate:industry:dry": "node seeds/industryMigration.js --dry-run",
+    "migrate:industry:create-missing": "node seeds/industryMigration.js --create-missing",
+    "bootstrap:prod": "npm run seed:categories && npm run migrate:industry:create-missing",
+    "start:prod": "npm run bootstrap:prod && node app.js",
     "postinstall": "npx puppeteer browsers install chrome --path ./.cache/puppeteer",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
