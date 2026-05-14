@@ -12,6 +12,7 @@ dotenv.config();
 await connectToDatabase();
 
 const generateSlug = (name) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+const generateRoleSlug = (name, functionalAreaId) => `${generateSlug(name)}-${String(functionalAreaId).slice(-8).toLowerCase()}`;
 
 //industry data
 const industriesData = [
@@ -229,7 +230,10 @@ const commonRoles = [
   { name: 'Receptionist', functionalAreaName: 'Administration', isGlobal: true },
   { name: 'Office Assistant', functionalAreaName: 'Administration', isGlobal: true },
   { name: 'Secretary', functionalAreaName: 'Administration', isGlobal: true },
-  
+  { name: 'Teacher', functionalAreaName: 'Education & Training', isGlobal: true },
+  { name: 'Trainer', functionalAreaName: 'Education & Training', isGlobal: true },
+  { name: 'Faculty', functionalAreaName: 'Education & Training', isGlobal: true },
+
   // HR roles (global)
   { name: 'HR Manager', functionalAreaName: 'Human Resources', isGlobal: true },
   { name: 'HR Executive', functionalAreaName: 'Human Resources', isGlobal: true },
@@ -640,13 +644,10 @@ const industrySpecificRoles = [
   { name: 'Beauty Advisor', functionalAreaName: 'Skincare & Cosmetics', isGlobal: false },
   { name: 'Cosmetics Sales Executive', functionalAreaName: 'Skincare & Cosmetics', isGlobal: false },
 
-   // Education & Training (A-Z)
+  // Education & Training (A-Z)
   { name: 'Academic Counselor', functionalAreaName: 'Education & Training', isGlobal: false }, // NEW
   { name: 'Content Developer', functionalAreaName: 'Education & Training', isGlobal: false },
-  { name: 'Faculty', functionalAreaName: 'Education & Training', isGlobal: true },
   { name: 'Lecturer', functionalAreaName: 'Education & Training',  isGlobal: false },
-  { name: 'Teacher', functionalAreaName: 'Education & Training', isGlobal: true },
-  { name: 'Trainer', functionalAreaName: 'Education & Training', isGlobal: true },
 ];
 
 // Combine all roles
@@ -1147,7 +1148,7 @@ async function seed() {
             const faInfo = functionalAreasMap[role.functionalAreaName];
             if (!faInfo) throw new Error(`Functional Area not found for role "${role.name}"`);
 
-            const slug = generateSlug(role.name);
+            const slug = generateRoleSlug(role.name, faInfo.id);
             const isGlobal = role.isGlobal || faInfo.isGlobal;
 
             await Role.findOneAndUpdate(
@@ -1170,31 +1171,6 @@ async function seed() {
 
             if (isGlobal) roleCounts.common++;
             else roleCounts.industrySpecific++;
-        }
-
-        // Ensure these 3 roles are available in every functional area.
-        const universalRoles = ['Teacher', 'Trainer', 'Faculty'];
-        for (const faName of Object.keys(functionalAreasMap)) {
-            const faInfo = functionalAreasMap[faName];
-            for (const roleName of universalRoles) {
-                await Role.findOneAndUpdate(
-                    { name: roleName, functionalArea: faInfo.id },
-                    {
-                        $set: {
-                            name: roleName,
-                            functionalArea: faInfo.id,
-                            isGlobal: true,
-                            keywords: [`${roleName.toLowerCase()} jobs`, `${roleName} vacancies`, `${roleName} careers`, `${roleName} openings`],
-                            alternativeNames: [],
-                            isActive: true,
-                        },
-                        $setOnInsert: {
-                            slug: generateSlug(roleName),
-                        },
-                    },
-                    { upsert: true, new: true, setDefaultsOnInsert: true }
-                );
-            }
         }
 
         // Remove typo role if it exists in DB.

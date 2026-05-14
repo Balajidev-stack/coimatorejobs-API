@@ -133,11 +133,26 @@ getFunctionalAreas: async (req, res) => {
 
       let finalFilter = baseFilter;
       if (includeGlobal !== 'false') {
-        finalFilter = {
-          $or: [{ isGlobal: true, isActive: true }, baseFilter],
-        };
+        if (functionalAreaId) {
+          // For FA-specific dropdowns, include:
+          // 1) roles from selected FA
+          // 2) all global roles
+          // Then dedupe by name so roles like Faculty won't repeat.
+          finalFilter = {
+            $or: [
+              { functionalArea: functionalAreaId, isActive: true },
+              { isGlobal: true, isActive: true },
+            ],
+          };
+        } else {
+          finalFilter = {
+            $or: [{ isGlobal: true, isActive: true }, baseFilter],
+          };
+        }
       }
 
+      // Keep role dropdown complete in dashboard forms.
+      // Hard 100-limit was truncating A-Z list around "Faculty".
       const rawData = await Role.find(finalFilter)
         .select('name slug priority isGlobal searchVolume isTrending keywords alternativeNames functionalArea')
         .populate({
@@ -149,17 +164,19 @@ getFunctionalAreas: async (req, res) => {
           },
         })
         .sort({ name: 1 }) // Keep dropdown roles in consistent A-Z order
-        .limit(100)
         .lean();
 
-      // Defensive dedupe for legacy DB duplicates (same role name in same functional area)
+      // Defensive dedupe:
+      // - for FA-specific requests with global merge: dedupe by role name
+      // - otherwise: dedupe by role name + functional area
       const dedupedMap = new Map();
       for (const role of rawData) {
         const faId =
           role.functionalArea && typeof role.functionalArea === 'object'
             ? String(role.functionalArea._id || '')
             : String(role.functionalArea || '');
-        const key = `${String(role.name || '').trim().toLowerCase()}__${faId}`;
+        const roleNameKey = String(role.name || '').trim().toLowerCase();
+        const key = functionalAreaId ? roleNameKey : `${roleNameKey}__${faId}`;
         if (!dedupedMap.has(key)) {
           dedupedMap.set(key, role);
         }
