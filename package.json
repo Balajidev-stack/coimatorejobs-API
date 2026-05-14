@@ -8,7 +8,6 @@
     "start": "node app.js",
     "dev": "nodemon app.js",
     "seed:categories": "node seeds/categories.seed.js",
-    "seed:categories:reset": "node seeds/categories.seed.js --reset",
     "migrate:industry": "node seeds/industryMigration.js",
     "migrate:industry:dry": "node seeds/industryMigration.js --dry-run",
     "migrate:industry:create-missing": "node seeds/industryMigration.js --create-missing",

@@ -1027,7 +1027,14 @@ async function seed() {
     try {
         console.log('Starting enhanced seeding process...');
 
-        const shouldReset = process.env.SEED_RESET === 'true' || process.argv.includes('--reset');
+        const requestedReset = process.env.SEED_RESET === 'true' || process.argv.includes('--reset');
+        const allowDestructiveReset = process.env.ALLOW_SEED_RESET === 'true';
+        const isProduction = process.env.NODE_ENV === 'production';
+        const shouldReset = requestedReset && allowDestructiveReset && !isProduction;
+
+        if (requestedReset && !shouldReset) {
+            console.log('Reset request ignored for safety. To allow reset, set ALLOW_SEED_RESET=true and ensure NODE_ENV is not production.');
+        }
 
         if (shouldReset) {
             await Industry.deleteMany({});
@@ -1138,7 +1145,7 @@ async function seed() {
             const isGlobal = role.isGlobal || faInfo.isGlobal;
 
             await Role.findOneAndUpdate(
-                { slug, functionalArea: faInfo.id },
+                { name: role.name, functionalArea: faInfo.id },
                 {
                     $set: {
                         name: role.name,
