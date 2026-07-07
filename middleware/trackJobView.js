@@ -1,4 +1,5 @@
 // middleware/trackJobView.js
+import mongoose from 'mongoose';
 import JobPost from '../models/jobs.model.js';
 
 
@@ -89,10 +90,17 @@ const trackJobView = async (req, res, next) => {
       return next();
     }
 
-    const jobId = req.params.id;
+    let jobId = req.params.id;
     const viewerId = req.user.id;
 
     if (!jobId) return next();
+
+    // :id may be a Mongo ObjectId or an SEO slug - resolve slug to the real _id
+    if (!mongoose.Types.ObjectId.isValid(jobId)) {
+      const job = await JobPost.findOne({ slug: jobId }).select('_id');
+      if (!job) return next();
+      jobId = job._id;
+    }
 
     const today = new Date().toISOString().split("T")[0];
     const todayStart = new Date(today + "T00:00:00Z");

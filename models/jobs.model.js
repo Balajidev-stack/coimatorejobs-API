@@ -6,6 +6,7 @@ import Industry from './industry.model.js';
 import Role from './role.model.js';
 import Skill from './skill.model.js';
 import RoleSuggestion from './roleSuggestion.model.js';
+import CompanyProfile from './companyProfile.model.js';
 import { sendJobAlertEmail } from '../utils/mailer.js';
 
 export const COLLAR_CATEGORIES = [
@@ -243,21 +244,48 @@ const jobPostSchema = new mongoose.Schema({
 // });
 
 // ------------------ SLUG GENERATOR ------------------
-function generateSlug(title, cities, id) {
-  const baseSlug = title
-    ?.toLowerCase()
-    ?.replace(/[^a-z0-9]+/g, "-")
-    ?.replace(/^-+|-+$/g, "");
+// Format: title-company-city (falls back to title-city if company name is unavailable)
+const slugifyPart = (value) =>
+  String(value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+function generateSlug(title, companyName, cities) {
+  const titleSlug = slugifyPart(title);
+  const companySlug = slugifyPart(companyName);
 
   let citySlug = "india";
-
   if (Array.isArray(cities) && cities.length > 0) {
-    citySlug = cities.join("-").toLowerCase();
+    citySlug = slugifyPart(cities.join("-"));
   } else if (typeof cities === "string") {
-    citySlug = cities.toLowerCase();
+    citySlug = slugifyPart(cities);
   }
 
-  return `${baseSlug}-${citySlug}-${id}`;
+  const parts = [titleSlug, companySlug, citySlug].filter(Boolean);
+  return parts.join("-");
+}
+
+// Appends -2, -3, ... until the slug is unique (excluding the document being saved)
+async function ensureUniqueSlug(baseSlug, excludeId) {
+  let candidate = baseSlug;
+  let index = 2;
+  while (
+    await JobPost.exists({
+      slug: candidate,
+      ...(excludeId ? { _id: { $ne: excludeId } } : {}),
+    })
+  ) {
+    candidate = `${baseSlug}-${index}`;
+    index += 1;
+  }
+  return candidate;
+}
+
+async function resolveCompanyName(companyProfileId) {
+  if (!companyProfileId) return null;
+  const company = await CompanyProfile.findById(companyProfileId).select('companyName');
+  return company?.companyName || null;
 }
 
 // Auto-generate slug and seoKeywords on save
@@ -268,13 +296,12 @@ jobPostSchema.pre("save", async function (next) {
     if (
       this.isModified("title") ||
       this.isModified("location.city") ||
+      this.isModified("companyProfile") ||
       !this.slug
     ) {
-      this.slug = generateSlug(
-        this.title,
-        this.location?.city,
-        this._id
-      );
+      const companyName = await resolveCompanyName(this.companyProfile);
+      const baseSlug = generateSlug(this.title, companyName, this.location?.city);
+      this.slug = await ensureUniqueSlug(baseSlug, this._id);
     }
 
     // ---------- SEO KEYWORDS ----------
@@ -337,18 +364,26 @@ jobPostSchema.pre("findOneAndUpdate", async function (next) {
 
     if (!existing) return next();
 
-    const title = update.title || existing.title;
+    const cityChanged =
+      update?.location?.city !== undefined ||
+      update?.["location.city"] !== undefined;
+    const titleChanged = update?.title !== undefined;
 
-    const city =
-      update?.location?.city ||
-      update["location.city"] ||
-      existing.location?.city;
+    // Only regenerate the slug when the fields it's derived from actually change.
+    // companyProfile is fixed at job creation, so it never changes here.
+    if (titleChanged || cityChanged || !existing.slug) {
+      const title = update.title || existing.title;
+      const city =
+        update?.location?.city ||
+        update?.["location.city"] ||
+        existing.location?.city;
 
-    if (title && city) {
-      update.slug = generateSlug(title, city, existing._id);
+      const companyName = await resolveCompanyName(existing.companyProfile);
+      const baseSlug = generateSlug(title, companyName, city);
+      update.slug = await ensureUniqueSlug(baseSlug, existing._id);
+
+      this.setUpdate(update);
     }
-
-    this.setUpdate(update);
 
     next();
 

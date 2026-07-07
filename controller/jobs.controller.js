@@ -776,7 +776,12 @@ jobsController.getJobPost = async (req, res, next) => {
     const user = req.user;
     const jobPostId = req.params.id;
 
-    const jobPost = await JobPost.findById(jobPostId)
+    // Accept either a Mongo ObjectId or a SEO slug in the same :id param
+    const query = mongoose.Types.ObjectId.isValid(jobPostId)
+      ? { _id: jobPostId }
+      : { slug: jobPostId };
+
+    const jobPost = await JobPost.findOne(query)
       .populate('companyProfile', 'companyName logo')
       .populate('functionalAreas', 'name slug')
       .populate('industry', 'name slug')

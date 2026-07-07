@@ -9,6 +9,7 @@
     "dev": "nodemon app.js",
     "seed:categories": "node seeds/categories.seed.js",
     "migrate:industry": "node seeds/industryMigration.js",
+    "migrate:job-slugs": "node seeds/jobSlugMigration.js",
     "bootstrap:prod": "npm run seed:categories",
     "start:prod": "npm run bootstrap:prod && node app.js",
     "postinstall": "npx puppeteer browsers install chrome --path ./.cache/puppeteer",
