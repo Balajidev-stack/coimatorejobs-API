@@ -14,6 +14,7 @@ import { createNotification, notificationPresets } from '../utils/notificationHe
 import { ForbiddenError, BadRequestError, NotFoundError } from "../utils/errors.js";
 import { isValidEmailAddress, normalizeEmail } from "../utils/emailValidation.js";
 import { COLLAR_CATEGORIES } from '../models/jobs.model.js';
+import { requireEmployerJobPostLimit } from '../utils/employerPlanAccess.js';
 
 const jobsController = {};
 const MONTHLY_RESUME_LIMIT = 5;
@@ -251,6 +252,9 @@ jobsController.createJobPost = async (req, res, next) => {
     if (!mongoose.Types.ObjectId.isValid(employerId)) {
       throw new BadRequestError('Invalid employerId');
     }
+
+    const canPostByPlan = await requireEmployerJobPostLimit(req, res, employerId);
+    if (!canPostByPlan) return;
 
     /**
      * Validate company profile

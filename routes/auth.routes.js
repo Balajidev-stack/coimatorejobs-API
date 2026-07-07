@@ -21,6 +21,9 @@ authRouter.put('/reset-password', authenticate, authorize(['hr-admin', 'employer
 // Route for user signout
 authRouter.post('/sign-out', authenticate, authentication.signout);
 
+// Get fresh logged-in user status/profile summary
+authRouter.get('/me', authenticate, authentication.getCurrentUser);
+
 // Request password reset (send token)  - with rate limiting
 authRouter.post('/forgot-password', forgotPasswordLimiter, authentication.forgotPassword);
 

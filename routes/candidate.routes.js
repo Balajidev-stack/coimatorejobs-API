@@ -39,8 +39,8 @@ candidateRouter.put( '/candidate-profile/approve/:id', authenticate, authorize([
 candidateRouter.get('/candidate-profile/pending', authenticate, authorize(['hr-admin', 'superadmin']), candidateController.getPendingCandidateProfiles);
 
 
-// View all job posts (public for candidates)
-candidateRouter.get('/jobs', candidateController.getAllJobPosts);
+// View all job posts (public for guests/candidates; employer access can be plan-gated)
+candidateRouter.get('/jobs', optionalAuthenticate, candidateController.getAllJobPosts);
 
 // Apply to a job (with optional resume upload)
 candidateRouter.post('/jobs/apply/:jobId', authenticate, authorize(['candidate']), candidateUpload, candidateController.applyToJob);

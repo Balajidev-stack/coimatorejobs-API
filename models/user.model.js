@@ -79,9 +79,18 @@ const userSchema = new mongoose.Schema({
         ref: 'User',
         default: null
     },
+    activePaymentPlan: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'PaymentPlan',
+        default: null
+    },
+    paymentPlanAssignedAt: {
+        type: Date,
+        default: null
+    },
     assignmentSource: {
         type: String,
-        enum: ['self-signup', 'hr-admin', 'superadmin', 'superadmin-assigned', 'system'],
+        enum: ['self-signup', 'hr-admin', 'superadmin', 'superadmin-assigned', 'system', 'payment'],
         default: 'self-signup'
     },
     isActive: { type: Boolean, default: true },

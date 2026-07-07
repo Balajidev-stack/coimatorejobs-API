@@ -17,6 +17,10 @@ import { SUPERADMIN_EMAIL, THROTTLING_RETRY_DELAY_BASE } from "../config/env.js"
 import { getPrivateFileUrl } from "../utils/s3SignedUrl.js";
 import { DeleteObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import { s3 } from "../config/aws-s3.js";
+import {
+  requireEmployerPlanFeature,
+  requireEmployerResumeDownloadLimit,
+} from "../utils/employerPlanAccess.js";
 import fs from 'fs';
 import path from 'path';
 import natural from 'natural';  //library (for TF-IDF / cosine similarity)
@@ -270,6 +274,16 @@ candidateController.getAllCandidateProfiles = async (req, res, next) => {
   try {
     const requesterRole = req.user?.role || 'guest';
     const isPrivilegedViewer = ['employer', 'hr-admin', 'superadmin'].includes(requesterRole);
+
+    if (requesterRole === 'employer') {
+      const access = await requireEmployerPlanFeature({
+        req,
+        res,
+        booleanField: 'candidateProfileViewAccess',
+        featureLabel: 'Candidate profile list access',
+      });
+      if (!access.allowed) return;
+    }
 
     // Guests/candidates should only see searchable approved profiles with sensitive fields removed.
     const query = isPrivilegedViewer
@@ -797,6 +811,16 @@ candidateController.getCandidateProfile = async (req, res, next) => {
       throw new ForbiddenError('You do not have permission to access this profile');
     }
 
+    if (req.user.role === 'employer') {
+      const access = await requireEmployerPlanFeature({
+        req,
+        res,
+        booleanField: 'candidateProfileViewAccess',
+        featureLabel: 'Candidate profile view access',
+      });
+      if (!access.allowed) return;
+    }
+
     return res.status(200).json({
       success: true,
       profile
@@ -1051,6 +1075,16 @@ candidateController.getPendingCandidateProfiles = async (req, res, next) => {
  */
 candidateController.getAllJobPosts = async (req, res, next) => {
   try {
+    if (req.user?.role === 'employer') {
+      const access = await requireEmployerPlanFeature({
+        req,
+        res,
+        booleanField: 'jobListPageAccess',
+        featureLabel: 'Job list page access',
+      });
+      if (!access.allowed) return;
+    }
+
     const jobPosts = await JobPost.find({ status: 'Published' })
       .populate('companyProfile', 'companyName logo') 
       .populate('skills', 'name slug keywords') // Required Skills matching: name + slug + keywords
@@ -1890,22 +1924,9 @@ candidateController.getResumeForHR = async (req, res, next) => {
       return res.status(404).json({ success: false, message: "Resume not found" });
     }
 
-    // Employer daily download limit: 20 resumes/day (IST)
     if (userRole === 'employer') {
-      const dayKey = getIstDayKey();
-      const todayLog = await ResumeDownloadLog.findOne({
-        employer: userId,
-        dayKey,
-      }).select('downloadCount');
-
-      const dailyDownloadCount = Number(todayLog?.downloadCount || 0);
-
-      if (dailyDownloadCount >= 20) {
-        return res.status(429).json({
-          success: false,
-          message: "Daily download limit reached (20/day). Please download next day.",
-        });
-      }
+      const downloadAccess = await requireEmployerResumeDownloadLimit(req, res);
+      if (!downloadAccess.allowed) return;
     }
 
     const key = await resolveExistingResumeKey(resumeValue);

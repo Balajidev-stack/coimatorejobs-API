@@ -1,5 +1,6 @@
 // controller/admin.controller.js
 import User from '../models/user.model.js';
+import { requireEmployerPlanFeature } from '../utils/employerPlanAccess.js';
 
 // Import the new model at the top of your controller file
 import Homepage from '../models/homepage.model.js';
@@ -28,6 +29,16 @@ adminController.getAdminDashboard = async (req, res, next) => {
 // List all candidates: Accessible to admins and superadmins
 adminController.getAllCandidates = async (req, res, next) => {
     try {
+        if (req.user.role === 'employer') {
+            const access = await requireEmployerPlanFeature({
+                req,
+                res,
+                booleanField: 'candidateProfileViewAccess',
+                featureLabel: 'Candidate profile list access',
+            });
+            if (!access.allowed) return;
+        }
+
         const candidates = await User.find({ role: 'candidate' }).select('name email isActive createdAt');
         return res.status(200).json({
             success: true,

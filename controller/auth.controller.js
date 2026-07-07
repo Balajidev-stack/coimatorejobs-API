@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import User from "../models/user.model.js";
+import PaymentPlan from "../models/paymentPlan.model.js";
 import JobPost from "../models/jobs.model.js";
 import JobApplication from "../models/jobApply.model.js";
 import CompanyProfile from "../models/companyProfile.model.js";
@@ -17,7 +18,7 @@ import ResumeDownloadLog from "../models/resumeDownloadLog.model.js";
 import Notification from "../models/notification.model.js";
 import { JWT_SECRET, JWT_EXPIRES_IN, SUPERADMIN_EMAIL, THROTTLING_RETRY_DELAY_BASE } from "../config/env.js";
 import crypto from 'crypto';
-import { sendPasswordResetEmail, sendWelcomeEmail, sendSuperadminAlertEmail, sendUserStatusUpdateEmail, sendPasswordResetSuccessEmail, sendAdminPasswordResetEmail, sendProfileDeletionEmail, sendLoginOtpEmail } from '../utils/mailer.js';
+import { sendPasswordResetEmail, sendWelcomeEmail, sendSuperadminAlertEmail, sendUserStatusUpdateEmail, sendPasswordResetSuccessEmail, sendAdminPasswordResetEmail, sendProfileDeletionEmail, sendCandidateAccountDeletedAlertEmail, sendLoginOtpEmail } from '../utils/mailer.js';
 import { BadRequestError, ForbiddenError,NotFoundError} from '../utils/errors.js';
 import { isValidEmailAddress, normalizeEmail } from "../utils/emailValidation.js";
 import { createNotification, notificationPresets } from "../utils/notificationHelper.js";
@@ -30,6 +31,42 @@ const LOGIN_OTP_EXPIRY_MINUTES = 10;
 const LOGIN_OTP_MAX_ATTEMPTS = 5;
 const DEFAULT_PUBLIC_EMPLOYER_EMAIL = 'hello@coimbatorejobs.in';
 const INTERNAL_EMPLOYER_EMAIL_REGEX = /^employer_.*_@internal\.coimbatorejobs\.in$/i;
+
+const getDefaultFreePlanAssignment = async (session = null) => {
+  const query = PaymentPlan.findOne({
+    status: 'Active',
+    $or: [
+      { planType: 'Free' },
+      { name: /^free$/i, price: 0 },
+    ],
+  })
+    .sort({ createdAt: -1 })
+    .select('_id');
+
+  if (session) {
+    query.session(session);
+  }
+
+  const freePlan = await query;
+  if (!freePlan) return {};
+
+  return {
+    activePaymentPlan: freePlan._id,
+    paymentPlanAssignedAt: new Date(),
+  };
+};
+
+const assignDefaultFreePlanIfMissing = async (user) => {
+  if (!user || user.role !== 'employer' || user.activePaymentPlan) return user;
+
+  const freePlanAssignment = await getDefaultFreePlanAssignment();
+  if (!freePlanAssignment.activePaymentPlan) return user;
+
+  user.activePaymentPlan = freePlanAssignment.activePaymentPlan;
+  user.paymentPlanAssignedAt = freePlanAssignment.paymentPlanAssignedAt;
+  await user.save({ validateBeforeSave: false });
+  return user;
+};
 
 // Authentication controller object
 const authentication = {};
@@ -69,6 +106,97 @@ const getPublicEmployerEmail = (user) => {
     return DEFAULT_PUBLIC_EMPLOYER_EMAIL;
   }
   return email || DEFAULT_PUBLIC_EMPLOYER_EMAIL;
+};
+
+const getRegistrationAlertAdmins = async () => {
+  const configuredEmail = String(SUPERADMIN_EMAIL || '').trim().toLowerCase();
+  const admins = await User.find({
+    role: { $in: ['hr-admin', 'superadmin'] },
+    isActive: true,
+    $or: [{ isDeleted: false }, { isDeleted: { $exists: false } }],
+  }).select('_id name email role status');
+
+  const emailRecipients = new Set();
+  if (configuredEmail) emailRecipients.add(configuredEmail);
+
+  admins.forEach((admin) => {
+    const email = String(admin.email || '').trim().toLowerCase();
+    if (email) emailRecipients.add(email);
+  });
+
+  return {
+    admins,
+    emailRecipients: Array.from(emailRecipients),
+  };
+};
+
+const notifyAdminsOfRegistration = async (newUser) => {
+  try {
+    const { admins, emailRecipients } = await getRegistrationAlertAdmins();
+    const adminPath =
+      newUser.role === 'employer'
+        ? 'employers'
+        : newUser.role === 'candidate'
+          ? 'candidates'
+          : 'users';
+
+    const sentEmails = new Set();
+    const buildDashboardLink = (role) =>
+      `${process.env.FRONTEND_URL}/${role === 'superadmin' ? 'super-admin-dashboard' : 'hr-admin-dashboard'}/user-status?type=${adminPath}`;
+
+    const emailTasks = admins
+      .map((admin) => {
+        const recipient = String(admin.email || '').trim().toLowerCase();
+        if (!recipient || sentEmails.has(recipient)) return null;
+        sentEmails.add(recipient);
+        return sendSuperadminAlertEmail({
+          superadminEmail: recipient,
+          eventType: 'new_registration',
+          userEmail: newUser.email,
+          userRole: newUser.role,
+          message: 'New user registration via signup form',
+          dashboardLink: buildDashboardLink(admin.role),
+        });
+      })
+      .filter(Boolean);
+
+    emailRecipients
+      .filter((recipient) => !sentEmails.has(recipient))
+      .forEach((recipient) => {
+        sentEmails.add(recipient);
+        emailTasks.push(
+          sendSuperadminAlertEmail({
+            superadminEmail: recipient,
+            eventType: 'new_registration',
+            userEmail: newUser.email,
+            userRole: newUser.role,
+            message: 'New user registration via signup form',
+            dashboardLink: buildDashboardLink('superadmin'),
+          })
+        );
+      });
+
+    await Promise.allSettled(emailTasks);
+
+    await Promise.allSettled(
+      admins.map((admin) =>
+        createNotification(admin._id, 'email_update', {
+          ...notificationPresets.emailUpdate(
+            'New Registration Pending',
+            `${newUser.name} registered as ${newUser.role}. Please review the account status.`
+          ),
+          actionUrl:
+            admin.role === 'superadmin'
+              ? `/super-admin-dashboard/user-status?type=${adminPath}`
+              : `/hr-admin-dashboard/user-status?type=${adminPath}`,
+          icon: 'la-user-plus',
+          color: '#f59e0b',
+        })
+      )
+    );
+  } catch (error) {
+    console.error('Failed to notify admins about registration:', error);
+  }
 };
 
 /**
@@ -134,12 +262,17 @@ authentication.signup = async (req, res, next) => {
         //   : 'approved';
 
         // Create new user with optional role (defaults to 'candidate' in schema)
+        const freePlanAssignment =
+          safeRole === 'employer'
+            ? await getDefaultFreePlanAssignment(session)
+            : {};
         const newUser = new User({
           name,
           email: normalizedEmail,
           password: hashedPassword,
           role: safeRole,
-          status
+          status,
+          ...freePlanAssignment
         });
         await newUser.save({ session });
 
@@ -156,13 +289,7 @@ authentication.signup = async (req, res, next) => {
         // Small delay for Mailtrap
         await new Promise(resolve => setTimeout(resolve, 6000)); //remove when in production
 
-        await sendSuperadminAlertEmail({
-          superadminEmail: SUPERADMIN_EMAIL,
-          eventType: 'new_registration',
-          userEmail: normalizedEmail,
-          userRole: safeRole,
-          message: 'New user registration via signup form'
-        });
+        await notifyAdminsOfRegistration(newUser);
 
         // Send success response
         return res.status(201).json({
@@ -176,7 +303,8 @@ authentication.signup = async (req, res, next) => {
                 name: newUser.name,
                 email: newUser.email,
                 role: newUser.role,
-                status: newUser.status
+                status: newUser.status,
+                activePaymentPlan: newUser.activePaymentPlan || null
             }
         });
     } catch (error) {
@@ -274,6 +402,11 @@ authentication.createAdminUser = async (req, res, next) => {
     const resolvedStatus = isSuperadminAssignedUser ? 'pending' : 'approved';
     const resolvedAssignmentSource = isSuperadminAssignedUser ? 'superadmin-assigned' : creator.role;
 
+    const freePlanAssignment =
+      role === 'employer'
+        ? await getDefaultFreePlanAssignment(session)
+        : {};
+
    // Admin-created users: HR admin creates as approved, Superadmin-assigned users remain pending.
     const createPayload = {
       name,
@@ -284,7 +417,8 @@ authentication.createAdminUser = async (req, res, next) => {
       assignedHrAdmin: isSuperadminAssignedUser ? assignedHrAdminId : null,
       assignmentSource: resolvedAssignmentSource,
       isSystemGeneratedEmail,
-      loginId
+      loginId,
+      ...freePlanAssignment
     };
     if (!isSystemGeneratedEmail) {
       createPayload.email = finalEmail;
@@ -710,6 +844,7 @@ authentication.signin = async (req, res, next) => {
         //   });
         // }
 
+        await assignDefaultFreePlanIfMissing(user);
 
         if (['candidate', 'employer'].includes(user.role)) {
           const otpRecipient = resolveLoginOtpRecipient(user);
@@ -755,7 +890,8 @@ authentication.signin = async (req, res, next) => {
               status: user.status,
               loginId: user.loginId || null,
               email: user.email,
-              isSystemGeneratedEmail: user.isSystemGeneratedEmail
+              isSystemGeneratedEmail: user.isSystemGeneratedEmail,
+              activePaymentPlan: user.activePaymentPlan || null
             }
           });
         }
@@ -776,7 +912,8 @@ authentication.signin = async (req, res, next) => {
                 loginId: user.loginId || null,
                 // Hide internal email from frontend
                 email: user.isSystemGeneratedEmail ? null : user.email,
-                isSystemGeneratedEmail: user.isSystemGeneratedEmail
+                isSystemGeneratedEmail: user.isSystemGeneratedEmail,
+                activePaymentPlan: user.activePaymentPlan || null
 
             }
         });
@@ -842,6 +979,7 @@ authentication.verifySigninOtp = async (req, res, next) => {
     user.loginOtpHash = undefined;
     user.loginOtpExpiresAt = undefined;
     user.loginOtpAttempts = 0;
+    await assignDefaultFreePlanIfMissing(user);
     await user.save({ validateBeforeSave: false });
 
     const token = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
@@ -857,7 +995,8 @@ authentication.verifySigninOtp = async (req, res, next) => {
         status: user.status,
         loginId: user.loginId || null,
         email: user.isSystemGeneratedEmail ? null : user.email,
-        isSystemGeneratedEmail: user.isSystemGeneratedEmail
+        isSystemGeneratedEmail: user.isSystemGeneratedEmail,
+        activePaymentPlan: user.activePaymentPlan || null
       }
     });
   } catch (error) {
@@ -1125,7 +1264,8 @@ authentication.getUsersByRole = async (req, res, next) => {
     const normalizedSearch = String(search || '').trim();
     if (normalizedSearch) {
       const regex = new RegExp(normalizedSearch, 'i');
-      query.$and = [
+      query.$and = query.$and || [];
+      query.$and.push(
         {
           $or: [
             { name: regex },
@@ -1136,7 +1276,7 @@ authentication.getUsersByRole = async (req, res, next) => {
             { status: regex },
           ],
         },
-      ];
+      );
     }
 
     /**
@@ -1148,7 +1288,20 @@ authentication.getUsersByRole = async (req, res, next) => {
         ...(loggedInUser.employerIds || []),
         ...(loggedInUser.candidateIds || []),
       ].map((id) => id.toString());
-      query._id = { $in: [...new Set(assignedIds)] };
+
+      if (normalizedStatus === 'pending') {
+        query.$and = query.$and || [];
+        query.$and.push({
+          $or: [
+            { _id: { $in: [...new Set(assignedIds)] } },
+            { assignmentSource: 'self-signup' },
+            { assignmentSource: { $exists: false } },
+            { assignedHrAdmin: null },
+          ],
+        });
+      } else {
+        query._id = { $in: [...new Set(assignedIds)] };
+      }
     }
 
     // For pending users that are explicitly assigned by superadmin,
@@ -1297,12 +1450,19 @@ authentication.updateUserStatus = async (req, res, next) => {
     }
 
     // Send status update email to user
-    await sendUserStatusUpdateEmail({
-      recipient: user.email,
-      name: user.name,
-      status: status,
-      role: user.role
-    });
+    const statusEmailRecipient = normalizeEmail(user.email);
+    if (isValidEmailAddress(statusEmailRecipient)) {
+      await sendUserStatusUpdateEmail({
+        recipient: statusEmailRecipient,
+        name: user.name,
+        status: status,
+        role: user.role
+      });
+    } else {
+      console.warn(
+        `[USER_STATUS_EMAIL] Skipped ${status} email for user=${user._id} (${user.role}) because recipient is invalid/missing: ${user.email || 'empty'}`
+      );
+    }
     // Send alert to superadmin (if not superadmin updating)
     if (req.user.role !== 'superadmin') {
       await sendSuperadminAlertEmail({
@@ -1337,6 +1497,35 @@ authentication.signout = (req, res) => {
     // Note: JWT is stateless; client should remove token locally
     // Future enhancement: Implement server-side token blacklisting if needed
     return res.status(200).json({ success: true, message: "User signed out successfully" });
+};
+
+authentication.getCurrentUser = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user.id).select(
+      '_id name email role status loginId isSystemGeneratedEmail activePaymentPlan paymentPlanAssignedAt'
+    );
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    return res.status(200).json({
+      success: true,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.isSystemGeneratedEmail ? null : user.email,
+        role: user.role,
+        status: user.status,
+        loginId: user.loginId || null,
+        isSystemGeneratedEmail: user.isSystemGeneratedEmail,
+        activePaymentPlan: user.activePaymentPlan || null,
+        paymentPlanAssignedAt: user.paymentPlanAssignedAt || null,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
 };
 
 /**
@@ -1486,6 +1675,30 @@ authentication.deleteUserProfile = async (req, res, next) => {
       role: deletedUserSnapshot.role,
       deletedBy: loggedInUser.email
     });
+
+    if (deletedUserSnapshot.role === 'candidate') {
+      const { emailRecipients: adminRecipients } = await getRegistrationAlertAdmins();
+      const candidateDeletionAlertRecipients = [
+        ...adminRecipients,
+        process.env.MAIL_PRIVACY,
+        process.env.MAIL_SECURITY,
+      ]
+        .map((email) => normalizeEmail(email))
+        .filter((email, index, list) => isValidEmailAddress(email) && list.indexOf(email) === index);
+
+      await Promise.allSettled(
+        candidateDeletionAlertRecipients.map((recipient) =>
+          sendCandidateAccountDeletedAlertEmail({
+            recipient,
+            candidateName: deletedUserSnapshot.name,
+            candidateEmail: deletedUserSnapshot.email,
+            deletedBy: loggedInUser.email,
+            deletedByRole: loggedInUser.role,
+          })
+        )
+      );
+    }
+
     // Send alert to superadmin
     await sendSuperadminAlertEmail({
       superadminEmail: SUPERADMIN_EMAIL,
@@ -1511,6 +1724,7 @@ authentication.googleLogin = async (req, res, next) => {
     try {
         // 'role' is passed from the frontend Tabs (candidate or employer)
         const { token: googleToken, role } = req.body; 
+        const selectedRole = ['candidate', 'employer'].includes(role) ? role : 'candidate';
 
         // 1. Verify Google Token
         const ticket = await client.verifyIdToken({
@@ -1530,14 +1744,20 @@ authentication.googleLogin = async (req, res, next) => {
             const randomPass = crypto.randomBytes(16).toString('hex');
             const hashedPassword = await bcrypt.hash(randomPass, salt);
 
+            const freePlanAssignment =
+              selectedRole === 'employer'
+                ? await getDefaultFreePlanAssignment()
+                : {};
+
             user = new User({
                 name: name,
                 email: email,
                 password: hashedPassword,
-                role: role || 'candidate', // Uses the role from the frontend tab
+                role: selectedRole, // Uses the role from the frontend tab
                 status: 'pending',        // Auto-approve verified Google users changed to pending
                 isActive: true,
-                isDeleted: false
+                isDeleted: false,
+                ...freePlanAssignment
             });
 
             await user.save();
@@ -1551,6 +1771,8 @@ authentication.googleLogin = async (req, res, next) => {
               newUserRole: role || 'candidate'
             });
         }
+
+        await assignDefaultFreePlanIfMissing(user);
 
         // 4. Generate Application JWT (Matches your schema/middleware logic)
         const token = jwt.sign(
@@ -1568,7 +1790,8 @@ authentication.googleLogin = async (req, res, next) => {
                 name: user.name,
                 email: user.email,
                 role: user.role,
-                status: user.status
+                status: user.status,
+                activePaymentPlan: user.activePaymentPlan || null
             }
         });
 

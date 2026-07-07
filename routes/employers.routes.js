@@ -5,6 +5,7 @@ import resumeAlertController from '../controller/resumeAlert.controller.js';
 import jobsController from '../controller/jobs.controller.js';
 import employerDashboardController from '../controller/employerDashboard.controller.js';
 import hrAdminDashboardController from '../controller/hrAdminDashboard.controller.js';
+import paymentPlanController from '../controller/paymentPlan.controller.js';
 import { authenticate, authorize, authorizeEmployerLike, optionalAuthenticate } from '../middleware/auth.js';
 import companyUpload from '../utils/fileUpload.js';  
 import normalizeBody from '../utils/normalizeBody.js';
@@ -17,6 +18,23 @@ import trackView from '../middleware/trackView.js';
 import trackJobView from '../middleware/trackJobView.js';
 
 const employerRouter = Router();
+
+employerRouter.get('/active-payment-plans', authenticate, authorize(['employer']), paymentPlanController.getActivePaymentPlans);
+employerRouter.get('/my-payment-plan', authenticate, authorize(['employer']), paymentPlanController.getMyPaymentPlan);
+employerRouter.get('/my-plan-history', authenticate, authorize(['employer']), paymentPlanController.getMyPlanHistory);
+employerRouter.get('/my-plan-history/:transactionId/receipt', authenticate, authorize(['employer']), paymentPlanController.downloadMyPlanReceipt);
+employerRouter.delete('/my-plan-history/:transactionId', authenticate, authorize(['employer']), paymentPlanController.deleteMyPlanHistoryTransaction);
+employerRouter.post('/payment-plans/:id/razorpay-order', authenticate, authorize(['employer']), paymentPlanController.createPaymentOrder);
+employerRouter.post('/payment-plans/razorpay-verify', authenticate, authorize(['employer']), paymentPlanController.verifyPayment);
+employerRouter.post('/payment-plans/razorpay-failed', authenticate, authorize(['employer']), paymentPlanController.markPaymentFailed);
+employerRouter.get('/payment-plans', authenticate, authorize(['superadmin']), paymentPlanController.getPaymentPlans);
+employerRouter.get('/payment-plan-employers', authenticate, authorize(['superadmin']), paymentPlanController.getEmployerPlanOverview);
+employerRouter.patch('/payment-plan-employers/:employerId/remove-plan', authenticate, authorize(['superadmin']), paymentPlanController.removeEmployerPaymentPlan);
+employerRouter.get('/payment-plan-employers/:employerId/usage', authenticate, authorize(['superadmin']), paymentPlanController.getEmployerPlanUsage);
+employerRouter.post('/payment-plans', authenticate, authorize(['superadmin']), paymentPlanController.createPaymentPlan);
+employerRouter.put('/payment-plans/:id', authenticate, authorize(['superadmin']), paymentPlanController.updatePaymentPlan);
+employerRouter.patch('/payment-plans/:id/status', authenticate, authorize(['superadmin']), paymentPlanController.updatePaymentPlanStatus);
+employerRouter.delete('/payment-plans/:id', authenticate, authorize(['superadmin']), paymentPlanController.deletePaymentPlan);
 
 
 // Route to get all company profiles (accessible to admins and superadmins)

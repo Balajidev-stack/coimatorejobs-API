@@ -4,6 +4,7 @@ import CandidateProfile from '../models/candidateProfile.model.js';
 import { BadRequestError, NotFoundError } from '../utils/errors.js';
 import { sendResumeAlertEmail } from '../utils/mailer.js';
 import { matchResumeToAlert } from '../utils/resumeMatching.js'; 
+import { requireEmployerResumeAlertLimit } from '../utils/employerPlanAccess.js';
 import EventEmitter from 'events';
 
 const alertEmitter = new EventEmitter();
@@ -61,6 +62,9 @@ resumeAlertController.createResumeAlert = async (req, res, next) => {
     const employerId = req.user.id || req.user._id;
     let { title, criteria, frequency } = req.body;
 
+    const canCreateByPlan = await requireEmployerResumeAlertLimit(req, res);
+    if (!canCreateByPlan) return;
+
     if (!title || !criteria || Object.keys(criteria).length === 0) {
       throw new BadRequestError('Title and at least one criterion are required');
     }
@@ -82,11 +86,6 @@ resumeAlertController.createResumeAlert = async (req, res, next) => {
 
     if (criteria.role && !(await mongoose.model('Role').findById(criteria.role))) {
       throw new BadRequestError('Invalid Role');
-    }
-
-    const alertCount = await ResumeAlert.countDocuments({ employer: employerId });
-    if (alertCount >= 5) {
-      throw new BadRequestError('Maximum 5 resume alerts allowed per employer');
     }
 
     const newAlert = new ResumeAlert({

@@ -1093,7 +1093,6 @@ hrAdminDashboardController.getPendingActions = async (req, res, next) => {
     // so both dashboards show the same values.
     const companyMatch = {};
     const userMatch = {};
-    const candidateProfileMatch = {};
 
     // 1. Get pending company profile approvals (CompanyProfile model)
     const pendingCompanies = await CompanyProfile.find({
@@ -1125,14 +1124,14 @@ hrAdminDashboardController.getPendingActions = async (req, res, next) => {
       .sort({ createdAt: -1 })
       .limit(10);
 
-    // 4. Get pending Candidate Profile approvals (CandidateProfile model)
-    // 🚨 THIS WAS CHANGED FROM 'User.find' TO 'CandidateProfile.find'
-    const pendingCandidates = await CandidateProfile.find({
-      ...candidateProfileMatch,
+    // 4. Get pending candidate account registrations (User model)
+    const pendingCandidates = await User.find({
+      role: 'candidate',
       status: 'pending',
+      isActive: true,
+      $or: [{ isDeleted: false }, { isDeleted: { $exists: false } }],
     })
-      .populate('candidate', 'name email')
-      .select('fullName jobTitle email status createdAt')
+      .select('name email status createdAt')
       .sort({ createdAt: -1 })
       .limit(10);
 

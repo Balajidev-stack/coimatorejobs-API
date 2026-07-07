@@ -111,7 +111,7 @@ transporter.verify((error) => {
 
 
 // BASE EMAIL SENDER (DO NOT CHANGE UI)
-const sendMail = async ({ to, subject, html, text = '', cc = [], from }) => {
+const sendMail = async ({ to, subject, html, text = '', cc = [], from, attachments = [] }) => {
   try {
     const info = await transporter.sendMail({
       from: from || `"Coimbatore Jobs" <${defaultFromAddress}>`,
@@ -120,6 +120,7 @@ const sendMail = async ({ to, subject, html, text = '', cc = [], from }) => {
       subject,
       text,
       html,
+      attachments,
     });
 
     console.log(`Email sent successfully’ ${to} | MessageId: ${info.messageId}`);
@@ -465,6 +466,7 @@ const sendSuperadminAlertEmail = async ({
 const sendUserStatusUpdateEmail = async ({ recipient, name, status, role }) => {
   try {
     if (!recipient) throw new Error('Recipient email is missing');
+    const isCandidateApproved = role === 'candidate' && status === 'approved';
     await sendMail({
       from: `"Account Update" <${defaultFromAddress}>`,
       to: recipient,
@@ -478,8 +480,10 @@ const sendUserStatusUpdateEmail = async ({ recipient, name, status, role }) => {
           
           <div style="background: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0;">
             <p>
-              ${status === 'approved' 
-                ? 'You can now log in and start using our platform.' 
+              ${isCandidateApproved
+                ? 'Your candidate account has been approved. Please logout and login again, then go to My Profile to create your candidate profile.'
+                : status === 'approved' 
+                ? 'You can now log in and start using our platform.'
                 : 'If you believe this is an error, please contact support.'}
             </p>
           </div>
@@ -500,7 +504,7 @@ const sendUserStatusUpdateEmail = async ({ recipient, name, status, role }) => {
           </p>
         </div>
       `,
-      cc: [process.env.MAIL_SUPPORT] // Provision for support@
+      cc: []
     });
     console.log(`User status update (${status}) sent to ${recipient}`);
   } catch (error) {
@@ -634,6 +638,52 @@ const sendProfileDeletionEmail = async ({ recipient, name, role, deletedBy }) =>
     console.log(`Profile deletion email sent to ${recipient}`);
   } catch (error) {
     console.error(`Failed to send profile deletion email to ${recipient}:`, error);
+  }
+};
+
+const sendCandidateAccountDeletedAlertEmail = async ({
+  recipient,
+  candidateName,
+  candidateEmail,
+  deletedBy,
+  deletedByRole = 'admin',
+}) => {
+  try {
+    if (!recipient) throw new Error('Recipient email is missing');
+
+    await sendMail({
+      from: `"Account Alert" <${defaultFromAddress}>`,
+      to: recipient,
+      subject: `Candidate Account Deleted: ${candidateEmail || candidateName || 'Unknown Candidate'}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1e293b;">
+          <h2 style="color: #ef4444;">Candidate Account Deleted</h2>
+
+          <p>A candidate account has been deleted on Coimbatore Jobs.</p>
+
+          <div style="background: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 5px solid #ef4444;">
+            <p><strong>Candidate Name:</strong> ${candidateName || 'N/A'}</p>
+            <p><strong>Candidate Email:</strong> ${candidateEmail || 'N/A'}</p>
+            <p><strong>Deleted By:</strong> ${deletedBy || 'N/A'}</p>
+            <p><strong>Deleted By Role:</strong> ${deletedByRole || 'admin'}</p>
+            <p><strong>Deleted At:</strong> ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</p>
+          </div>
+
+          <p>This is an automated account deletion alert for admin, privacy, and security monitoring.</p>
+
+          <hr style="margin: 30px 0; border: none; border-top: 1px solid #e2e8f0;" />
+
+          <p style="color: #64748b; font-size: 12px; text-align: center;">
+            &copy; ${new Date().getFullYear()} Coimbatore Jobs by Cispro. All rights reserved.
+          </p>
+        </div>
+      `,
+      cc: [],
+    });
+
+    console.log(`Candidate deletion alert sent to ${recipient}`);
+  } catch (error) {
+    console.error(`Failed to send candidate deletion alert to ${recipient}:`, error);
   }
 };
 
@@ -1042,5 +1092,95 @@ const sendEmployerJobPostedEmail = async ({ recipient, employerName, jobTitle, c
   }
 };
 
-export { sendJobAlertEmail, sendJobAlertSetupConfirmationEmail, sendResumeAlertEmail, sendPasswordResetEmail, sendLoginOtpEmail, sendWelcomeEmail, sendSuperadminAlertEmail, sendUserStatusUpdateEmail, sendPasswordResetSuccessEmail, sendAdminPasswordResetEmail, sendProfileDeletionEmail, sendCompanyProfileStatusEmail, sendCandidateProfileStatusEmail, sendJobApplicationNotificationEmail, sendCandidateApplicationConfirmationEmail, sendApplicationStatusUpdateEmail, sendEmployerJobPostedEmail };
+const formatReceiptCurrency = (amount = 0, currency = 'INR') =>
+  new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency,
+    maximumFractionDigits: 0,
+  }).format(Number(amount || 0));
+
+const sendPlanReceiptEmail = async ({
+  recipient,
+  employerName,
+  planName,
+  amount = 0,
+  currency = 'INR',
+  receipt,
+  paymentId,
+  activatedAt,
+  expiresAt,
+  paymentMode,
+  attachments = [],
+}) => {
+  try {
+    if (!recipient) throw new Error('Recipient email is missing');
+
+    const activatedDate = activatedAt
+      ? new Date(activatedAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
+      : new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+    const expiryDate = expiresAt
+      ? new Date(expiresAt).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })
+      : 'No expiry';
+
+    await sendMail({
+      from: `"Coimbatore Jobs Receipts" <${defaultFromAddress}>`,
+      to: recipient,
+      subject: `Payment Receipt - ${planName}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; color: #1f2937;">
+          <div style="background: #6b3f2a; color: #ffffff; padding: 22px 26px; border-radius: 14px 14px 0 0;">
+            <h2 style="margin: 0; font-size: 24px;">Coimbatore Jobs Receipt</h2>
+            <p style="margin: 8px 0 0; color: #f6d7bd;">Your employer plan has been activated successfully.</p>
+          </div>
+          <div style="border: 1px solid #eadfd2; border-top: 0; padding: 26px; border-radius: 0 0 14px 14px;">
+            <p>Dear ${employerName || 'Employer'},</p>
+            <p>Thank you for choosing the <strong>${planName}</strong> plan.</p>
+            <table style="width: 100%; border-collapse: collapse; margin: 22px 0;">
+              <tbody>
+                <tr>
+                  <td style="padding: 12px; border: 1px solid #f0e7dc; background: #fffaf4;"><strong>Receipt No</strong></td>
+                  <td style="padding: 12px; border: 1px solid #f0e7dc;">${receipt || '-'}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 12px; border: 1px solid #f0e7dc; background: #fffaf4;"><strong>Plan</strong></td>
+                  <td style="padding: 12px; border: 1px solid #f0e7dc;">${planName}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 12px; border: 1px solid #f0e7dc; background: #fffaf4;"><strong>Amount</strong></td>
+                  <td style="padding: 12px; border: 1px solid #f0e7dc;">${formatReceiptCurrency(amount, currency)}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 12px; border: 1px solid #f0e7dc; background: #fffaf4;"><strong>Payment ID</strong></td>
+                  <td style="padding: 12px; border: 1px solid #f0e7dc;">${paymentId || (Number(amount) > 0 ? '-' : 'Free activation')}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 12px; border: 1px solid #f0e7dc; background: #fffaf4;"><strong>Activated On</strong></td>
+                  <td style="padding: 12px; border: 1px solid #f0e7dc;">${activatedDate}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 12px; border: 1px solid #f0e7dc; background: #fffaf4;"><strong>Valid Till</strong></td>
+                  <td style="padding: 12px; border: 1px solid #f0e7dc;">${expiryDate}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 12px; border: 1px solid #f0e7dc; background: #fffaf4;"><strong>Mode</strong></td>
+                  <td style="padding: 12px; border: 1px solid #f0e7dc;">${paymentMode || 'Online'}</td>
+                </tr>
+              </tbody>
+            </table>
+            <p style="color: #64748b; font-size: 13px;">This is an automatically generated receipt from Coimbatore Jobs.</p>
+            <p style="color: #64748b; font-size: 12px; text-align: center; margin-top: 26px;">
+              &copy; ${new Date().getFullYear()} Coimbatore Jobs by Cispro. All rights reserved.
+            </p>
+          </div>
+        </div>
+      `,
+      attachments,
+    });
+    console.log(`Plan receipt email sent to ${recipient}`);
+  } catch (error) {
+    console.error(`Failed to send plan receipt email to ${recipient}:`, error);
+  }
+};
+
+export { sendJobAlertEmail, sendJobAlertSetupConfirmationEmail, sendResumeAlertEmail, sendPasswordResetEmail, sendLoginOtpEmail, sendWelcomeEmail, sendSuperadminAlertEmail, sendUserStatusUpdateEmail, sendPasswordResetSuccessEmail, sendAdminPasswordResetEmail, sendProfileDeletionEmail, sendCandidateAccountDeletedAlertEmail, sendCompanyProfileStatusEmail, sendCandidateProfileStatusEmail, sendJobApplicationNotificationEmail, sendCandidateApplicationConfirmationEmail, sendApplicationStatusUpdateEmail, sendEmployerJobPostedEmail, sendPlanReceiptEmail };
 

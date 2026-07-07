@@ -12,6 +12,7 @@ import { sendApplicationStatusUpdateEmail } from '../utils/mailer.js';
 import { createNotification, notificationPresets } from '../utils/notificationHelper.js';
 import { getPrivateFileUrl } from '../utils/s3SignedUrl.js';
 import { s3 } from "../config/aws-s3.js";
+import { requireEmployerResumeDownloadLimit } from '../utils/employerPlanAccess.js';
 
 const employerApplicantsController = {};
 
@@ -1045,25 +1046,10 @@ employerApplicantsController.downloadApplicantResume = async (req, res, next) =>
       });
     }
 
-    const currentUsage = await EmployerResumeDownloadLog.countDocuments({
-      employer: user.id,
-      jobPost: application.jobPost._id,
-      monthKey,
+    const downloadAccess = await requireEmployerResumeDownloadLimit(req, res, {
+      source: 'applicant',
     });
-
-    const quota = await buildResumeQuotaResponse({
-      user,
-      jobId: String(application.jobPost._id),
-    });
-
-    if (currentUsage >= MONTHLY_RESUME_LIMIT) {
-      return res.status(429).json({
-        success: false,
-        code: 'DOWNLOAD_LIMIT_REACHED',
-        message: `Monthly download limit reached for "${application.jobPost.title}". You can download only ${MONTHLY_RESUME_LIMIT} resumes per job post each month.`,
-        downloadQuota: quota,
-      });
-    }
+    if (!downloadAccess.allowed) return;
 
     const key = await resolveExistingResumeKey(resumeValue);
     if (!key) {
