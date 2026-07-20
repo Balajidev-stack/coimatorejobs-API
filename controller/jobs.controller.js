@@ -1214,6 +1214,26 @@ const paginate = (req) => {
   return { skip: (page - 1) * limit, limit };
 };
 
+// Public sitemap feed: minimal, SEO-safe fields for sitemap-eligible jobs only.
+// Eligible = Published + non-expired deadline + a valid, non-empty slug.
+// No auth, no populate, lean read. Returns all eligible jobs (pagination deferred).
+jobsController.getSitemapJobs = async (req, res, next) => {
+  try {
+    const jobs = await JobPost.find({
+      status: 'Published',
+      applicationDeadline: { $gte: new Date() },
+      slug: { $exists: true, $nin: [null, ''], $regex: /\S/ }, // reject null/empty/whitespace-only
+    })
+      .select('slug status createdAt updatedAt applicationDeadline -_id')
+      .sort({ updatedAt: -1 })
+      .lean();
+
+    return res.status(200).json({ success: true, count: jobs.length, jobs });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // New SEO-focused APIs
 jobsController.getJobsByLocation = async (req, res, next) => {
   try {

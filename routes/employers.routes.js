@@ -72,6 +72,9 @@ employerRouter.post('/jobs/create', authenticate, authorizeEmployerLike(), compa
 // Get all job posts (filtered by employer for non-superadmins)
 employerRouter.get('/jobs/fetch-all', authenticate, authorize(['employer', 'hr-admin', 'superadmin', 'candidate']),jobsController.getJobPosts);
 
+// Public sitemap feed (SEO-safe minimal fields; no auth). Static path — safe from :id routes.
+employerRouter.get('/jobs/sitemap', jobsController.getSitemapJobs);
+
 // Get a single job post for editing
 // employerRouter.get('/jobs/fetch/:id',authenticate, authorize(['employer', 'hr-admin', 'superadmin', 'candidate']), trackJobView, jobsController.getJobPost);
 
