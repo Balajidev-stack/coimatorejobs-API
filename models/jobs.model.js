@@ -20,6 +20,21 @@ export const COLLAR_CATEGORIES = [
   'Red Collar',
 ];
 
+// Optional structured salary sub-document (Google JobPosting baseSalary source).
+// `_id: false` + `default: undefined` on the parent path ensure the sub-document
+// (and its currency/unit defaults) is only materialized when salary is actually
+// provided, so existing records and salary-less job creation are unaffected.
+const salarySchema = new mongoose.Schema({
+  min: { type: Number, min: 0 },
+  max: { type: Number, min: 0 },
+  currency: { type: String, trim: true, uppercase: true, default: 'INR' },
+  unit: {
+    type: String,
+    enum: ['HOUR', 'DAY', 'WEEK', 'MONTH', 'YEAR'],
+    default: 'YEAR',
+  },
+}, { _id: false });
+
 const jobPostSchema = new mongoose.Schema({
   employer: {
     type: mongoose.Schema.Types.ObjectId,
@@ -64,6 +79,11 @@ const jobPostSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Offered salary is required'],
     // enum: ['< ?5 LPA', '?5-10 LPA', '?10-15 LPA', '?15-20 LPA', '?20-30 LPA', '?30+ LPA', 'Negotiable'],
+  },
+  // Optional structured salary (coexists with the human-readable offeredSalary).
+  salary: {
+    type: salarySchema,
+    default: undefined,
   },
   careerLevel: {
     type: String,

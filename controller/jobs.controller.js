@@ -54,6 +54,103 @@ const applyCurrentRoleCollarCategory = (job) => {
   };
 };
 
+const SALARY_UNITS = ['HOUR', 'DAY', 'WEEK', 'MONTH', 'YEAR'];
+
+// Validates and normalizes an optional structured salary payload.
+// Returns `undefined` when no usable salary (no min/max) is supplied so the
+// stored document stays salary-less; throws BadRequestError on invalid input.
+const normalizeSalaryInput = (salary) => {
+  if (salary === undefined || salary === null || salary === '') return undefined;
+  if (typeof salary !== 'object' || Array.isArray(salary)) {
+    throw new BadRequestError('salary must be an object with min/max/currency/unit');
+  }
+
+  const result = {};
+
+  const parseAmount = (value, label) => {
+    if (value === undefined || value === null || value === '') return undefined;
+    const num = Number(value);
+    if (Number.isNaN(num) || num < 0) {
+      throw new BadRequestError(`salary.${label} must be a non-negative number`);
+    }
+    return num;
+  };
+
+  const min = parseAmount(salary.min, 'min');
+  const max = parseAmount(salary.max, 'max');
+
+  // No numeric bounds => treat as no structured salary (keep legacy behavior).
+  if (min === undefined && max === undefined) return undefined;
+
+  if (min !== undefined && max !== undefined && min > max) {
+    throw new BadRequestError('salary.min must be less than or equal to salary.max');
+  }
+
+  if (min !== undefined) result.min = min;
+  if (max !== undefined) result.max = max;
+
+  result.currency = salary.currency
+    ? String(salary.currency).trim().toUpperCase()
+    : 'INR';
+
+  const unit = salary.unit ? String(salary.unit).trim().toUpperCase() : 'YEAR';
+  if (!SALARY_UNITS.includes(unit)) {
+    throw new BadRequestError(`salary.unit must be one of: ${SALARY_UNITS.join(', ')}`);
+  }
+  result.unit = unit;
+
+  return result;
+};
+
+// Maps the free-text jobType to Google JobPosting `employmentType` enum values.
+const EMPLOYMENT_TYPE_MAP = {
+  fulltime: 'FULL_TIME',
+  parttime: 'PART_TIME',
+  contract: 'CONTRACTOR',
+  contractor: 'CONTRACTOR',
+  freelance: 'CONTRACTOR',
+  internship: 'INTERN',
+  intern: 'INTERN',
+  temporary: 'TEMPORARY',
+};
+
+// Derives normalized, SEO-friendly fields (Google JobPosting) from existing job
+// data. Purely additive and read-only — no stored data or schema is changed.
+// Fields resolve to `undefined` when unavailable so they are omitted from JSON.
+const buildJobPostingSeoFields = (job) => {
+  if (!job) return {};
+
+  const employmentKey = String(job.jobType || '')
+    .toLowerCase()
+    .replace(/[^a-z]/g, '');
+  const employmentType = EMPLOYMENT_TYPE_MAP[employmentKey];
+
+  const jobLocationType =
+    String(job.remoteWork || '').toLowerCase() === 'remote'
+      ? 'TELECOMMUTE'
+      : undefined;
+
+  const cityValue = Array.isArray(job.location?.city)
+    ? job.location.city[0]
+    : job.location?.city;
+  const addressLocality = cityValue ? String(cityValue).trim() : undefined;
+
+  const educationRequirements =
+    Array.isArray(job.qualification) && job.qualification.length > 0
+      ? job.qualification
+      : undefined;
+
+  const experienceRequirements = job.experience || undefined;
+
+  return {
+    ...(employmentType ? { employmentType } : {}),
+    ...(jobLocationType ? { jobLocationType } : {}),
+    ...(addressLocality ? { addressLocality } : {}),
+    ...(educationRequirements ? { educationRequirements } : {}),
+    ...(experienceRequirements ? { experienceRequirements } : {}),
+  };
+};
+
 const resolveIndustryId = async (industryValue) => {
   const normalized = toSafeString(industryValue);
   if (!normalized) throw new BadRequestError('Invalid or missing industry');
@@ -276,6 +373,7 @@ jobsController.createJobPost = async (req, res, next) => {
       // specialisms,
       jobType,
       offeredSalary,
+      salary, // optional structured salary { min, max, currency, unit }
       careerLevel,
       experience,
       gender,
@@ -341,6 +439,9 @@ jobsController.createJobPost = async (req, res, next) => {
       throw new BadRequestError('Positions must be at least 1');
     }
 
+    // Optional structured salary (validated; undefined when not usable)
+    const normalizedSalary = normalizeSalaryInput(salary);
+
 
     // Validate companyProfile if provided explicitly
     if (companyProfile && !mongoose.Types.ObjectId.isValid(companyProfile)) {
@@ -382,6 +483,7 @@ jobsController.createJobPost = async (req, res, next) => {
       // specialisms,
       jobType,
       offeredSalary,
+      ...(normalizedSalary ? { salary: normalizedSalary } : {}),
       careerLevel,
       experience,
       gender: gender || 'No Preference',
@@ -582,7 +684,7 @@ jobsController.getJobPosts = async (req, res, next) => {
       .populate('industry', 'name slug')
       .populate('role', 'name slug defaultCollarCategory')
       .populate('skills', 'name')
-      .select('employer companyProfile title location applicantCount status createdAt applicationDeadline postedBy')
+      .select('employer companyProfile title location applicantCount status createdAt applicationDeadline postedBy slug salary offeredSalary')
       .sort({ createdAt: -1 });  // Most recent first
 
     const normalizedSearch = String(search || '').trim().toLowerCase();
@@ -785,14 +887,46 @@ jobsController.getJobPost = async (req, res, next) => {
       ? { _id: jobPostId }
       : { slug: jobPostId };
 
+    // Public SEO-ready projection: explicit whitelist so no PII or internal
+    // analytics fields are ever exposed on this public endpoint.
+    const PUBLIC_JOB_FIELDS = [
+      'title',
+      'description',
+      'slug',
+      'seoKeywords',
+      'jobType',
+      'offeredSalary',
+      'salary',
+      'careerLevel',
+      'experience',
+      'gender',
+      'qualification',
+      'remoteWork',
+      'collarCategory',
+      'location',
+      'positions',
+      'applicationDeadline',
+      'status',
+      'companyProfile',
+      'industry',
+      'functionalAreas',
+      'role',
+      'skills',
+      'createdAt',
+      'updatedAt',
+    ].join(' ');
+
     const jobPost = await JobPost.findOne(query)
-      .populate('companyProfile', 'companyName logo')
+      .populate({
+        path: 'companyProfile',
+        select: 'companyName logo website industry',
+        populate: { path: 'industry', select: 'name slug' },
+      })
       .populate('functionalAreas', 'name slug')
       .populate('industry', 'name slug')
       .populate('role', 'name slug defaultCollarCategory')
       .populate('skills', 'name')
-      // .select('title description contactEmail contactUsername specialisms jobType offeredSalary careerLevel experience gender industry qualification applicationDeadline location remoteWork status companyProfile -__v')
-      .select('-__v -applicantCount'); // fix here
+      .select(PUBLIC_JOB_FIELDS);
 
     if (!jobPost) {
       throw new NotFoundError('Job post not found');
@@ -803,9 +937,14 @@ jobsController.getJobPost = async (req, res, next) => {
     //   throw new ForbiddenError('You do not have permission to access this job post');
     // }
 
+    const jobPostData = applyCurrentRoleCollarCategory(jobPost);
+
     return res.status(200).json({
       success: true,
-      jobPost: applyCurrentRoleCollarCategory(jobPost),
+      jobPost: {
+        ...jobPostData,
+        ...buildJobPostingSeoFields(jobPostData),
+      },
     });
   } catch (error) {
     next(error);
@@ -879,6 +1018,17 @@ jobsController.updateJobPost = async (req, res, next) => {
      'applicationDeadline', 'remoteWork', 'status', 'maxApplicants', 'collarCategory'].forEach(field => {
       if (req.body[field] !== undefined) updateData[field] = req.body[field];
     });
+
+    // Structured salary update (independent of offeredSalary). Setting salary to
+    // null/empty clears it; a valid object replaces it; omitting leaves it as-is.
+    if (Object.prototype.hasOwnProperty.call(req.body, 'salary')) {
+      if (req.body.salary === null || req.body.salary === '') {
+        updateData.salary = undefined;
+      } else {
+        const normalizedSalary = normalizeSalaryInput(req.body.salary);
+        updateData.salary = normalizedSalary; // undefined when not usable
+      }
+    }
 
     if (Object.prototype.hasOwnProperty.call(req.body, 'collarCategory')) {
       if (!COLLAR_CATEGORIES.includes(req.body.collarCategory)) {
@@ -1076,7 +1226,7 @@ jobsController.getJobsByLocation = async (req, res, next) => {
       .populate('industry', 'name slug')
       .populate('role', 'name slug')
       .populate('skills', 'name')
-      .select('title role location status createdAt slug seoKeywords')
+      .select('title role location status createdAt applicationDeadline slug seoKeywords salary offeredSalary')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);

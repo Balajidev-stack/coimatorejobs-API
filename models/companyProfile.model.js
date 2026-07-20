@@ -23,6 +23,22 @@ const isValidTeamSize = (value) => {
   return Number.isFinite(start) && Number.isFinite(end) && start <= end;
 };
 
+// Lightweight, permissive logo validation. Absent/empty is allowed (logo stays
+// optional); any non-empty value must be an absolute HTTPS URL. Deliberately
+// does NOT enforce a file extension so external CDN/S3 URLs (often extension-less
+// or query-signed) are accepted, while relative paths and http:// are rejected.
+const isValidLogoUrl = (value) => {
+  if (value === undefined || value === null) return true;
+  const trimmed = String(value).trim();
+  if (trimmed === '') return true;
+  try {
+    const url = new URL(trimmed);
+    return url.protocol === 'https:' && Boolean(url.hostname);
+  } catch {
+    return false;
+  }
+};
+
 const companyProfileSchema = new mongoose.Schema({
   employer: {
     type: mongoose.Schema.Types.ObjectId,
@@ -220,6 +236,10 @@ const companyProfileSchema = new mongoose.Schema({
   logo: {
     type: String,
     trim: true,
+    validate: {
+      validator: isValidLogoUrl,
+      message: 'Logo must be an absolute HTTPS URL',
+    },
   },
   // coverImage: {
   //   type: String,
