@@ -313,12 +313,11 @@ jobPostSchema.pre("save", async function (next) {
   try {
 
     // ---------- SLUG ----------
-    if (
-      this.isModified("title") ||
-      this.isModified("location.city") ||
-      this.isModified("companyProfile") ||
-      !this.slug
-    ) {
+    // Canonical slugs are IMMUTABLE after creation to preserve permanent SEO URLs.
+    // Only generate when the document has no slug yet (new jobs, or legacy docs
+    // that predate slug generation). Ordinary edits to title/location/company must
+    // NOT regenerate an existing valid slug. Uniqueness (-2, -3, ...) is unchanged.
+    if (!this.slug) {
       const companyName = await resolveCompanyName(this.companyProfile);
       const baseSlug = generateSlug(this.title, companyName, this.location?.city);
       this.slug = await ensureUniqueSlug(baseSlug, this._id);
@@ -384,15 +383,11 @@ jobPostSchema.pre("findOneAndUpdate", async function (next) {
 
     if (!existing) return next();
 
-    const cityChanged =
-      update?.location?.city !== undefined ||
-      update?.["location.city"] !== undefined;
-    const titleChanged = update?.title !== undefined;
-
-    // Only regenerate the slug when the fields it's derived from actually change.
-    // companyProfile is fixed at job creation, so it never changes here.
-    if (titleChanged || cityChanged || !existing.slug) {
-      const title = update.title || existing.title;
+    // Canonical slugs are IMMUTABLE after creation. Never regenerate an existing
+    // valid slug when title/location/company are edited — this keeps permanent SEO
+    // URLs stable. Only backfill a slug for legacy docs that don't have one yet.
+    if (!existing.slug) {
+      const title = update?.title || existing.title;
       const city =
         update?.location?.city ||
         update?.["location.city"] ||
