@@ -338,7 +338,10 @@ test('appliedFilters echoes resolution state', () => {
 // NORMALIZATION (shared by the model hook and both migrations)
 // ===========================================================================
 test('experience text parsing', () => {
-  assert.deepEqual(parseExperienceText('Fresher'), { min: 0, max: 1 });
+  // "Freshers" is its own bucket in production (87 of 256 jobs) and is distinct
+  // from "0-1 Years" (50 jobs). max=0 keeps fresher roles out of ?experience=1-3.
+  assert.deepEqual(parseExperienceText('Fresher'), { min: 0, max: 0 });
+  assert.deepEqual(parseExperienceText('Freshers'), { min: 0, max: 0 });
   assert.deepEqual(parseExperienceText('Less than 1 year'), { min: 0, max: 1 });
   assert.deepEqual(parseExperienceText('1-3 years'), { min: 1, max: 3 });
   assert.deepEqual(parseExperienceText('10+ years'), { min: 10, max: 99 });
@@ -359,6 +362,22 @@ test('offeredSalary omits rather than guesses', () => {
   assert.equal(parseOfferedSalaryToMonthly('Negotiable'), null);
   assert.equal(parseOfferedSalaryToMonthly('20000 - 30000'), null, 'no pay period -> omit');
   assert.equal(parseOfferedSalaryToMonthly('0K - 20K /Month'), null, 'corrupt 0 bound -> omit');
+});
+
+test('offeredSalary handles the "Thousands" production format', () => {
+  // 73 of 256 production jobs use this shape and previously parsed to null.
+  assert.deepEqual(parseOfferedSalaryToMonthly('12 Thousands - 15 Thousands'), { min: 12000, max: 15000 });
+  assert.deepEqual(parseOfferedSalaryToMonthly('75 Thousands - 100 Thousands'), { min: 75000, max: 100000 });
+});
+
+test('offeredSalary rejects implausible parses', () => {
+  // Real production values whose literal reading is nonsense.
+  assert.equal(parseOfferedSalaryToMonthly('20000 - 35000 LPA'), null, 'Rs.16 crore/month -> omit');
+  assert.equal(
+    parseOfferedSalaryToMonthly('18500 Thousands - 25000 Thousands'),
+    null,
+    'Rs.1.85 crore/month -> omit',
+  );
 });
 
 test('structured salary wins over text and rejects non-INR', () => {

@@ -81,9 +81,15 @@ export const parseExperienceText = (value) => {
   const raw = normalizeText(value);
   if (!raw) return null;
 
-  // Fresher family resolves to 0-1 years regardless of any digits present.
+  // Fresher family resolves to EXACTLY 0 years.
+  //
+  // max is 0, not 1, on purpose: with max=1 a "Freshers" job also satisfied
+  // ?experience=1-3 (overlap needs experienceMax >= 1), so fresher roles leaked
+  // into 1-3 year searches. Production data confirms "Freshers" is its own
+  // distinct value (87 of 256 jobs) alongside a separate "0-1 Years" bucket,
+  // so the two must not collapse onto the same range.
   if (/fresher|fresh graduate|no experience|entry[- ]level/.test(raw)) {
-    return { min: 0, max: 1 };
+    return { min: 0, max: 0 };
   }
   if (/less than (1|a|one) year|under (1|a|one) year/.test(raw)) {
     return { min: 0, max: 1 };
@@ -120,6 +126,19 @@ export const deriveExperienceRange = (job) => parseExperienceText(job?.experienc
 // SALARY
 // ---------------------------------------------------------------------------
 
+// Plausibility bounds for a MONTHLY Indian salary, in INR.
+//
+// These exist because production data contains strings that parse cleanly but
+// mean nothing, e.g. "20000 - 35000 LPA" (the author meant rupees, but LPA
+// multiplies by 100000 -> Rs.16.6 crore/month) and "18500 Thousands - 25000
+// Thousands" (-> Rs.1.85 crore/month). Publishing those would put absurd jobs
+// into every high-salary filter result.
+//
+// Deliberately wide: Rs.1,000/month clears genuine entry-level stipends and
+// Rs.10,00,000/month (Rs.1.2 crore/year) clears any real posting on this board.
+export const MIN_PLAUSIBLE_MONTHLY_INR = 1000;
+export const MAX_PLAUSIBLE_MONTHLY_INR = 1000000;
+
 const buildMonthlyRange = (lowRaw, highRaw, multiplier, unit) => {
   const factor = MONTHLY_FACTOR[unit];
   if (!factor) return null;
@@ -131,6 +150,9 @@ const buildMonthlyRange = (lowRaw, highRaw, multiplier, unit) => {
   // A zero or negative bound means the source string was corrupt (the known
   // "0K" legacy case). Omit rather than publish a false band.
   if (low <= 0 || high <= 0) return null;
+
+  // Corrupt-but-parseable source -> omit rather than publish a false band.
+  if (low < MIN_PLAUSIBLE_MONTHLY_INR || high > MAX_PLAUSIBLE_MONTHLY_INR) return null;
 
   return { min: low, max: high };
 };
@@ -190,7 +212,11 @@ export const parseOfferedSalaryToMonthly = (value) => {
   if (low === null || high === null) return null;
 
   const isLakh = /lpa|lakh/.test(normalized);
-  const isThousand = /\d\s*k\b/.test(normalized);
+  // "thousand(s)" is included because it is the second most common salary
+  // format in production ("12 Thousands - 15 Thousands" — 73 of 256 job
+  // documents). Without it those strings carry no recognisable pay period and
+  // were rejected outright, capping salary coverage at 71.5%.
+  const isThousand = /\d\s*k\b/.test(normalized) || /thousand/.test(normalized);
 
   let multiplier = 1;
   let unit = '';
@@ -210,10 +236,36 @@ export const parseOfferedSalaryToMonthly = (value) => {
     else if (/hour|hourly/.test(normalized)) unit = 'HOUR';
   }
 
+  // A thousands-denominated figure with no stated period is monthly in this
+  // dataset ("12 Thousands - 15 Thousands" is Rs.12,000-15,000 per month; the
+  // annual reading would be far below minimum wage).
+  if (!unit && isThousand) unit = 'MONTH';
+
   // No identifiable pay period -> omit rather than invent one.
   if (!unit) return null;
 
   return buildMonthlyRange(low, high, multiplier, unit);
+};
+
+/**
+ * The pay period detected in a free-text salary string — FOR AUDIT ONLY.
+ *
+ * Written to the migration rollback report so a human can see how each raw
+ * value was interpreted. Deliberately NOT written to salaryNorm.source: that
+ * field records PROVENANCE ('structured' | 'parsed') and is constrained by an
+ * enum in models/jobs.model.js. See the note on deriveSalaryNorm.
+ */
+export const detectSalaryPeriod = (value) => {
+  const normalized = normalizeText(value);
+  if (!normalized) return '';
+  if (/lpa|lakh/.test(normalized)) return 'annual';
+  if (/month|monthly|\bpm\b/.test(normalized)) return 'monthly';
+  if (/year|yearly|annual|annum|\bpa\b/.test(normalized)) return 'annual';
+  if (/week/.test(normalized)) return 'weekly';
+  if (/\bday\b|daily/.test(normalized)) return 'daily';
+  if (/hour|hourly/.test(normalized)) return 'hourly';
+  if (/\d\s*k\b|thousand/.test(normalized)) return 'monthly';
+  return '';
 };
 
 /**

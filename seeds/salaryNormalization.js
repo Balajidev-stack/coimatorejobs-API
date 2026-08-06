@@ -1,70 +1,106 @@
 // seeds/salaryNormalization.js
 // ---------------------------------------------------------------------------
-// Backfills JobPost.salaryNorm { min, max, source } — INR per MONTH — from the
-// structured `salary` sub-document when present, otherwise by parsing the
-// free-text `offeredSalary` string. Uses utils/jobNormalization.js, the same
-// module the model's pre-save hook uses, so a backfilled value is identical to
-// one the model would have generated itself.
+// ONE-TIME PRODUCTION DATA MIGRATION — salary normalization.
 //
-// WHY THIS EXISTS: ?salary=30000-50000 cannot be matched against strings like
-// "15K - 18K /Month". Documents written before the Query Engine landed have no
-// salaryNorm and would be invisible to the salary filter until this runs.
+// Populates salaryNorm { min, max, source } on existing JobPost documents so
+// the query engine can serve ?salary=<min>-<max> as an indexed numeric range.
 //
-// SAFETY:
-//   * DRY RUN BY DEFAULT. Nothing is written unless --apply is passed.
-//   * Writes ONLY salaryNorm. The `salary` sub-document is READ, never written
-//     — it feeds the Google JobPosting baseSalary on the frontend and must not
-//     be altered by this phase.
-//   * Uses updateOne with $set, so no model hook fires and no slug can move.
-//   * Idempotent: re-running produces the same values and reports 0 changes.
+// Standalone. Nothing in the application imports this file.
+//
+// ---------------------------------------------------------------------------
+// UNITS: salaryNorm.min / .max are INR PER MONTH. ALWAYS.
+// ---------------------------------------------------------------------------
+// Every source format is converted to a monthly figure — "5 LPA" is stored as
+// 41667, not 500000.
+//
+// This is not a stylistic choice. utils/jobQueryFilter.js resolves
+// ?salary=30000-50000 by comparing against salaryNorm.min/max as MONTHLY rupees
+// (Phase 1). Storing an annual figure would make a 5 LPA job invisible to
+// "30k-50k" (its true monthly pay) and instead match "1,00,000+", which is
+// wrong in both directions.
+//
+// ---------------------------------------------------------------------------
+// salaryNorm.source is PROVENANCE, not a pay period.
+// ---------------------------------------------------------------------------
+// Allowed values are 'structured' (taken from the optional `salary` sub-document
+// the employer form can populate) and 'parsed' (derived from the free-text
+// offeredSalary string). That enum is declared on salaryNormSchema in
+// models/jobs.model.js.
+//
+// Writing a pay period ('monthly' / 'annual') there would violate the enum. A
+// bulkWrite $set bypasses validators so the write itself would succeed — but the
+// next time an employer edits that job, doc.save() validates the whole document
+// and throws a ValidationError, breaking job editing for every migrated job.
+//
+// The detected pay period IS captured, per document, in the rollback report, so
+// nothing is lost for auditing.
+//
+// ---------------------------------------------------------------------------
+// SAFETY CONTRACT
+// ---------------------------------------------------------------------------
+//   * DRY RUN BY DEFAULT. Writes only with --apply.
+//   * Touches ONLY salaryNorm. The source fields `offeredSalary` and `salary`
+//     are READ, never written — `salary` feeds the Google JobPosting baseSalary.
+//   * NEVER overwrites: only documents without salaryNorm are considered.
+//   * timestamps: false on every bulk operation — createdAt/updatedAt untouched.
+//   * updateOne + $set only — no model hooks fire.
+//   * Writes a rollback report BEFORE applying.
+//   * "Negotiable", empty strings and implausible values are SKIPPED, not
+//     guessed. A skipped job is simply excluded while ?salary= is active.
 //
 // Usage:
-//   npm run migrate:salary-norm              # dry run: report only, no writes
-//   npm run migrate:salary-norm -- --apply   # real run
+//   node seeds/salaryNormalization.js --dry-run
+//   node seeds/salaryNormalization.js --apply
 //   node seeds/salaryNormalization.js --apply --verbose
-//
-// Flags:
-//   --apply     perform writes (omit for dry run)
-//   --verbose   print every job's parsed mapping
 // ---------------------------------------------------------------------------
 import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
 import mongoose from 'mongoose';
 import connectToDatabase from '../database/mongodb.js';
 import JobPost from '../models/jobs.model.js';
-import { deriveSalaryNorm } from '../utils/jobNormalization.js';
+import { deriveSalaryNorm, detectSalaryPeriod } from '../utils/jobNormalization.js';
+
+dotenv.config();
 
 const args = process.argv.slice(2);
 const APPLY = args.includes('--apply');
 const VERBOSE = args.includes('--verbose');
 
 const BATCH_SIZE = 500;
+const REPORT_PATH = path.resolve(process.cwd(), 'migration-report-salary.json');
+
 const line = (char = '-') => console.log(char.repeat(78));
 
-const migrateSalaryNorm = async () => {
-  dotenv.config();
+const migrate = async () => {
+  const startedAt = Date.now();
   await connectToDatabase();
 
   line('=');
-  console.log(
-    `Salary normalization — ${APPLY ? 'REAL RUN (writes enabled)' : 'DRY RUN (no writes)'}`,
-  );
-  console.log('Target: salaryNorm { min, max, source } in INR per MONTH');
+  console.log(`Salary normalization — ${APPLY ? 'APPLY (writes enabled)' : 'DRY RUN (no writes)'}`);
+  console.log('Fields written: salaryNorm { min, max, source }  (nothing else)');
+  console.log('Units: INR per MONTH. source = provenance (structured | parsed).');
   line('=');
 
-  const jobs = await JobPost.find({})
+  const totalJobs = await JobPost.countDocuments({});
+  const alreadyMigrated = await JobPost.countDocuments({
+    salaryNorm: { $exists: true, $ne: null },
+  });
+
+  const candidates = await JobPost.find({ salaryNorm: { $exists: false } })
     .select('_id offeredSalary salary salaryNorm')
     .sort({ createdAt: 1 })
     .lean();
 
-  let parsed = 0;
+  let updated = 0;
   let fromStructured = 0;
   let fromText = 0;
-  let unparseable = 0;
-  let unchanged = 0;
-  let pending = [];
+  let parseErrors = 0;
   let written = 0;
+  let pending = [];
 
-  const unparseableSamples = new Map();
+  const rollback = [];
+  const errorSamples = new Map();
 
   const flush = async () => {
     if (!APPLY || !pending.length) {
@@ -76,42 +112,43 @@ const migrateSalaryNorm = async () => {
     pending = [];
   };
 
-  for (const job of jobs) {
+  for (const job of candidates) {
     const norm = deriveSalaryNorm(job);
 
     if (!norm) {
-      unparseable += 1;
-      const key = String(job.offeredSalary || '(empty)').trim().toLowerCase();
-      unparseableSamples.set(key, (unparseableSamples.get(key) || 0) + 1);
+      parseErrors += 1;
+      const key = String(job.offeredSalary ?? '(missing)').trim() || '(empty)';
+      errorSamples.set(key, (errorSamples.get(key) || 0) + 1);
+      if (VERBOSE) console.log(`  [skip] ${job._id}  ${JSON.stringify(job.offeredSalary)}`);
       continue;
     }
 
-    parsed += 1;
+    updated += 1;
     if (norm.source === 'structured') fromStructured += 1;
     else fromText += 1;
 
-    const existing = job.salaryNorm;
-    const alreadyCorrect =
-      existing &&
-      existing.min === norm.min &&
-      existing.max === norm.max &&
-      existing.source === norm.source;
+    rollback.push({
+      documentId: String(job._id),
+      source: {
+        offeredSalary: job.offeredSalary ?? null,
+        salary: job.salary ?? null,
+        detectedPeriod: detectSalaryPeriod(job.offeredSalary), // audit only
+      },
+      oldValues: { salaryNorm: null },
+      newValues: { salaryNorm: { min: norm.min, max: norm.max, source: norm.source } },
+    });
 
-    if (alreadyCorrect) {
-      unchanged += 1;
-      continue;
-    }
-
-    if (VERBOSE) {
+    if (!APPLY || VERBOSE) {
       console.log(
-        `  ${job._id}  "${job.offeredSalary}"  ->  ${norm.min} - ${norm.max} INR/month  (${norm.source})`,
+        `  ${job._id}  old=${JSON.stringify(job.offeredSalary)}  ->  new=${norm.min}-${norm.max} INR/month (${norm.source})  WOULD UPDATE`,
       );
     }
 
     pending.push({
       updateOne: {
         filter: { _id: job._id },
-        update: { $set: { salaryNorm: norm } },
+        update: { $set: { salaryNorm: { min: norm.min, max: norm.max, source: norm.source } } },
+        timestamps: false,
       },
     });
 
@@ -120,44 +157,66 @@ const migrateSalaryNorm = async () => {
 
   await flush();
 
-  const total = jobs.length;
-  const coverage = total === 0 ? 0 : Math.round((parsed / total) * 10000) / 100;
+  fs.writeFileSync(
+    REPORT_PATH,
+    JSON.stringify(
+      {
+        migration: 'salaryNormalization',
+        mode: APPLY ? 'apply' : 'dry-run',
+        generatedAt: new Date().toISOString(),
+        units: 'INR per month',
+        fieldsWritten: ['salaryNorm'],
+        totalJobs,
+        documentCount: rollback.length,
+        documents: rollback,
+      },
+      null,
+      2,
+    ),
+    'utf8',
+  );
+
+  const skipped = totalJobs - alreadyMigrated - updated - parseErrors;
+  const elapsed = ((Date.now() - startedAt) / 1000).toFixed(2);
 
   line('=');
-  console.log(`Total job posts          : ${total}`);
-  console.log(`Parsed successfully      : ${parsed}`);
-  console.log(`  from salary sub-doc    : ${fromStructured}`);
-  console.log(`  from offeredSalary text: ${fromText}`);
-  console.log(`Already correct          : ${unchanged}`);
-  console.log(`Needing write            : ${parsed - unchanged}`);
-  console.log(`Unparseable (skipped)    : ${unparseable}`);
-  console.log(`COVERAGE                 : ${coverage}%   ${coverage >= 95 ? '[OK]' : '[BELOW 95% GATE]'}`);
-  console.log(`Documents written        : ${APPLY ? written : 0}${APPLY ? '' : '  (dry run)'}`);
+  console.log('REPORT');
+  line('-');
+  console.log(`Total Jobs         : ${totalJobs}`);
+  console.log(`Updated            : ${updated}${APPLY ? '' : '  (would update)'}`);
+  console.log(`  from salary sub-doc : ${fromStructured}`);
+  console.log(`  from offeredSalary  : ${fromText}`);
+  console.log(`Skipped            : ${skipped < 0 ? 0 : skipped}`);
+  console.log(`Already Migrated   : ${alreadyMigrated}`);
+  console.log(`Parse Errors       : ${parseErrors}`);
+  console.log(`Documents Written  : ${APPLY ? written : 0}`);
+  console.log(`Execution Time     : ${elapsed}s`);
+  const coverage =
+    totalJobs === 0 ? 0 : Math.round(((alreadyMigrated + updated) / totalJobs) * 10000) / 100;
+  console.log(`Coverage           : ${coverage}%  ${coverage >= 95 ? '[OK]' : '[BELOW 95% GATE]'}`);
   line('=');
+  console.log(`Rollback report    : ${REPORT_PATH}`);
 
-  if (unparseableSamples.size) {
-    console.log('Unparseable `offeredSalary` values (value -> count):');
-    [...unparseableSamples.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 30)
-      .forEach(([value, count]) => console.log(`  ${count.toString().padStart(5)}  "${value}"`));
-    console.log(
-      '\n"Negotiable" and any string with no identifiable pay period parse to',
-    );
-    console.log('nothing BY DESIGN. Those jobs are EXCLUDED whenever ?salary= is active.');
+  if (errorSamples.size) {
     line('-');
+    console.log('Skipped `offeredSalary` values (value -> count):');
+    [...errorSamples.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .forEach(([value, count]) => console.log(`  ${String(count).padStart(5)}  ${JSON.stringify(value)}`));
+    console.log('\n"Negotiable", blank values and implausible figures are skipped BY DESIGN.');
+    console.log('Those jobs are EXCLUDED whenever ?salary= is active.');
   }
 
   if (!APPLY) {
-    console.log('DRY RUN — nothing was written. Re-run with --apply to persist.');
+    console.log('\nDRY RUN — nothing was written. Re-run with --apply to persist.');
   }
 
   await mongoose.connection.close();
 };
 
-migrateSalaryNorm()
+migrate()
   .then(() => process.exit(0))
   .catch((error) => {
-    console.error('Salary normalization failed:', error);
+    console.error('Salary normalization FAILED:', error);
     process.exit(1);
   });

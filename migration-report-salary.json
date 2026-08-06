@@ -1,0 +1,4549 @@
+{
+  "migration": "salaryNormalization",
+  "mode": "dry-run",
+  "generatedAt": "2026-08-06T06:11:26.902Z",
+  "units": "INR per month",
+  "fieldsWritten": [
+    "salaryNorm"
+  ],
+  "totalJobs": 256,
+  "documentCount": 252,
+  "documents": [
+    {
+      "documentId": "695f6a51055a4a5c0f374ebd",
+      "source": {
+        "offeredSalary": "12K - 20K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 12000,
+          "max": 20000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "695f74dcbb7f2c6049749049",
+      "source": {
+        "offeredSalary": "22K - 25K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 22000,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "695f73d3bb7f2c6049749047",
+      "source": {
+        "offeredSalary": "16 - 18 LPA",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 133333,
+          "max": 150000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "695f72de055a4a5c0f3755e2",
+      "source": {
+        "offeredSalary": "15 - 18 LPA",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 125000,
+          "max": 150000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "695f7727bb7f2c604974904b",
+      "source": {
+        "offeredSalary": "22K - 25K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 22000,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "695fa5cebb7f2c6049749055",
+      "source": {
+        "offeredSalary": "22 Thousands - 22 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 22000,
+          "max": 22000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "695fa645bb7f2c6049749057",
+      "source": {
+        "offeredSalary": "22 Thousands - 25 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 22000,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "695fa4aa055a4a5c0f3797f8",
+      "source": {
+        "offeredSalary": "22 Thousands - 25 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 22000,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "695fa550bb7f2c6049749053",
+      "source": {
+        "offeredSalary": "18 Thousands - 20 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 18000,
+          "max": 20000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "696081840ba45fca0cf3fc2e",
+      "source": {
+        "offeredSalary": "13K - 15K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 13000,
+          "max": 15000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "696082300ba45fca0cf3fc85",
+      "source": {
+        "offeredSalary": "10 Thousands - 12 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 10000,
+          "max": 12000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "696082c00ba45fca0cf3fcdc",
+      "source": {
+        "offeredSalary": "15 Thousands - 20 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 20000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6960831274a74929ff2cf2b2",
+      "source": {
+        "offeredSalary": "15 Thousands - 20 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 20000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69661d479da7de8349f511ce",
+      "source": {
+        "offeredSalary": "18 Thousands - 20 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 18000,
+          "max": 20000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69735f23a7a7455525bd498e",
+      "source": {
+        "offeredSalary": "13 Thousands - 18 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 13000,
+          "max": 18000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69736390a7a7455525bd49bf",
+      "source": {
+        "offeredSalary": "13 Thousands - 15 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 13000,
+          "max": 15000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6978a106fd61954377a7b05b",
+      "source": {
+        "offeredSalary": "30 Thousands - 60 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 30000,
+          "max": 60000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69817887404593a9283ab28b",
+      "source": {
+        "offeredSalary": "15 Thousands - 25 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "698178fe404593a9283ab2d8",
+      "source": {
+        "offeredSalary": "15 Thousands - 18 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 18000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "698b2b10b21a7c786e0acce8",
+      "source": {
+        "offeredSalary": "20 Thousands - 50 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20000,
+          "max": 50000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6992b0aa583bc968e6d36549",
+      "source": {
+        "offeredSalary": "18 Thousands - 20 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 18000,
+          "max": 20000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6996f4e2ef59aec8b05ee235",
+      "source": {
+        "offeredSalary": "20 Thousands - 40 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20000,
+          "max": 40000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6996fdfaef59aec8b05ef041",
+      "source": {
+        "offeredSalary": "20 Thousands - 20 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20000,
+          "max": 20000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69983c9b08b7014868599530",
+      "source": {
+        "offeredSalary": "20 Thousands - 20 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20000,
+          "max": 20000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69983f4f08b7014868599eb0",
+      "source": {
+        "offeredSalary": "15 Thousands - 15 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 15000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6998463f08b701486859a424",
+      "source": {
+        "offeredSalary": "15 Thousands - 15 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 15000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69984f6008b701486859a4d4",
+      "source": {
+        "offeredSalary": "1.8 Lakhs - 3.8 Lakhs",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 31667,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "699ec133da133caa93ec2c14",
+      "source": {
+        "offeredSalary": "4 Lakhs - 6 Lakhs",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 33333,
+          "max": 50000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69a55a122bd0d5441c869110",
+      "source": {
+        "offeredSalary": "18 Thousands - 20 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 18000,
+          "max": 20000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69a55b822bd0d5441c86988e",
+      "source": {
+        "offeredSalary": "20 Thousands - 25 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20000,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69a6b929c047ae9b52f15f57",
+      "source": {
+        "offeredSalary": "3 Lakhs - 5 Lakhs",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 25000,
+          "max": 41667,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69a81539c047ae9b52f2133e",
+      "source": {
+        "offeredSalary": "12 Thousands - 15 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 12000,
+          "max": 15000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69a81fe3c047ae9b52f21b69",
+      "source": {
+        "offeredSalary": "30 Thousands - 55 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 30000,
+          "max": 55000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69a820ccc047ae9b52f228a1",
+      "source": {
+        "offeredSalary": "30 Thousands - 55 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 30000,
+          "max": 55000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69a8216bc047ae9b52f22bfb",
+      "source": {
+        "offeredSalary": "30 Thousands - 55 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 30000,
+          "max": 55000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69a828f8c047ae9b52f244d8",
+      "source": {
+        "offeredSalary": "8 Lakhs - 10 Lakhs",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 66667,
+          "max": 83333,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69a82ac6c047ae9b52f245c0",
+      "source": {
+        "offeredSalary": "14 Lakhs - 16 Lakhs",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 116667,
+          "max": 133333,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69a970d6c047ae9b52f31680",
+      "source": {
+        "offeredSalary": "25 Thousands - 45 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 25000,
+          "max": 45000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69a97421c047ae9b52f33717",
+      "source": {
+        "offeredSalary": "12 Thousands - 15 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 12000,
+          "max": 15000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69a97528c047ae9b52f33b23",
+      "source": {
+        "offeredSalary": "15 Thousands - 20 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 20000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69a975dec047ae9b52f33c58",
+      "source": {
+        "offeredSalary": "10 Lakhs - 12 Thousands",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 83333,
+          "max": 100000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69a976f7c047ae9b52f33fa0",
+      "source": {
+        "offeredSalary": "10 Lakhs - 12 Thousands",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 83333,
+          "max": 100000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69aa71ea8547577b45b2230f",
+      "source": {
+        "offeredSalary": "14 Lakhs - 16 Lakhs",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 116667,
+          "max": 133333,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69aa734c8547577b45b22c24",
+      "source": {
+        "offeredSalary": "14 Lakhs - 16 Lakhs",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 116667,
+          "max": 133333,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69aab5598547577b45b2e21d",
+      "source": {
+        "offeredSalary": "20 Thousands - 30 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20000,
+          "max": 30000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69aab6338547577b45b2e3be",
+      "source": {
+        "offeredSalary": "10 Thousands - 15 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 10000,
+          "max": 15000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69aab6b98547577b45b2e453",
+      "source": {
+        "offeredSalary": "20 Thousands - 30 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20000,
+          "max": 30000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69aab73f8547577b45b2e595",
+      "source": {
+        "offeredSalary": "20 Thousands - 30 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20000,
+          "max": 30000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69aab7e58547577b45b2e651",
+      "source": {
+        "offeredSalary": "10 Lakhs - 15 Lakhs",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 83333,
+          "max": 125000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69aab8ce8547577b45b2e6e9",
+      "source": {
+        "offeredSalary": "10 Thousands - 15 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 10000,
+          "max": 15000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69aab96d8547577b45b2e782",
+      "source": {
+        "offeredSalary": "15 Thousands - 20 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 20000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69aabc318547577b45b2ea05",
+      "source": {
+        "offeredSalary": "4.5 Lakhs - 5 Lakhs",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 37500,
+          "max": 41667,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69aac2258547577b45b2fd8b",
+      "source": {
+        "offeredSalary": "13 Thousands - 15 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 13000,
+          "max": 15000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69aac6cb8547577b45b31121",
+      "source": {
+        "offeredSalary": " Lakhs - 15 Thousands",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 125000,
+          "max": 125000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69aacbf98547577b45b315b5",
+      "source": {
+        "offeredSalary": "12 Thousands - 15 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 12000,
+          "max": 15000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69aacca88547577b45b31647",
+      "source": {
+        "offeredSalary": "16 Thousands - 18 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 16000,
+          "max": 18000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69aacd278547577b45b316d9",
+      "source": {
+        "offeredSalary": "18 Thousands - 20 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 18000,
+          "max": 20000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69aad06a8547577b45b31e7c",
+      "source": {
+        "offeredSalary": "4 Lakhs - 6 Lakhs",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 33333,
+          "max": 50000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69aad1968547577b45b31ffe",
+      "source": {
+        "offeredSalary": "30 Thousands - 35 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 30000,
+          "max": 35000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69abb5a38547577b45b35289",
+      "source": {
+        "offeredSalary": "10 Lakhs - 12 Lakhs",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 83333,
+          "max": 100000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69abc0e38547577b45b35912",
+      "source": {
+        "offeredSalary": "30 Thousands - 35 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 30000,
+          "max": 35000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69ae6406652925f7ba1c144c",
+      "source": {
+        "offeredSalary": "20K - 25K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20000,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69ae66f4652925f7ba1c1ba1",
+      "source": {
+        "offeredSalary": "5 Lakhs - 5 Lakhs",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 41667,
+          "max": 41667,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69ae6d1e652925f7ba1c2dc5",
+      "source": {
+        "offeredSalary": "20K - 20K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20000,
+          "max": 20000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69ae6de1652925f7ba1c2e76",
+      "source": {
+        "offeredSalary": "12K - 15K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 12000,
+          "max": 15000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69ae6ea7652925f7ba1c2f24",
+      "source": {
+        "offeredSalary": "25K - 25K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 25000,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69ae744e652925f7ba1c45ff",
+      "source": {
+        "offeredSalary": "30 Thousands - 30 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 30000,
+          "max": 30000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69ae8084652925f7ba1c5bce",
+      "source": {
+        "offeredSalary": "20 Thousands - 30 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20000,
+          "max": 30000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69ae819f652925f7ba1c6126",
+      "source": {
+        "offeredSalary": "14 Thousands - 17 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 14000,
+          "max": 17000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69ae83d7652925f7ba1c6446",
+      "source": {
+        "offeredSalary": "18 Thousands - 25 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 18000,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69ae872c652925f7ba1c6c8e",
+      "source": {
+        "offeredSalary": "15 Thousands - 17 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 17000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69ae8973652925f7ba1c71f4",
+      "source": {
+        "offeredSalary": "12K - 15K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 12000,
+          "max": 15000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69ae8a5b652925f7ba1c72a6",
+      "source": {
+        "offeredSalary": "12K - 15K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 12000,
+          "max": 15000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69aea1c6652925f7ba1cb09e",
+      "source": {
+        "offeredSalary": "3 Lakhs - 5 Lakhs",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 25000,
+          "max": 41667,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69b39998652925f7ba1e514c",
+      "source": {
+        "offeredSalary": "20 Thousands - 25 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20000,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69b3ab41652925f7ba1e6a99",
+      "source": {
+        "offeredSalary": "20 Thousands - 25 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20000,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69b7dbe3652925f7ba203a7c",
+      "source": {
+        "offeredSalary": "75 Thousands - 100 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 75000,
+          "max": 100000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69b802ef652925f7ba204801",
+      "source": {
+        "offeredSalary": "15 Thousands - 20 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 20000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69b80668652925f7ba204d5a",
+      "source": {
+        "offeredSalary": "15 Thousands - 20 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 20000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69b808bc652925f7ba2050c2",
+      "source": {
+        "offeredSalary": "15 Thousands - 29 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 29000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69b808c7652925f7ba2050e0",
+      "source": {
+        "offeredSalary": "12 Lakhs - 13 Lakhs",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 100000,
+          "max": 108333,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69b80abb652925f7ba20541c",
+      "source": {
+        "offeredSalary": "14 Thousands - 15 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 14000,
+          "max": 15000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69b8de0b652925f7ba207a2c",
+      "source": {
+        "offeredSalary": "15K - 20K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 20000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69b8df03652925f7ba208104",
+      "source": {
+        "offeredSalary": "12K - 15K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 12000,
+          "max": 15000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69b8fdb5652925f7ba209a1e",
+      "source": {
+        "offeredSalary": "12 Thousands - 15 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 12000,
+          "max": 15000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69b8fe3e652925f7ba209ad9",
+      "source": {
+        "offeredSalary": "12 Thousands - 15 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 12000,
+          "max": 15000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69ba330e652925f7ba217b1d",
+      "source": {
+        "offeredSalary": "12 Thousands - 17 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 12000,
+          "max": 17000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69ba33e9652925f7ba217efa",
+      "source": {
+        "offeredSalary": "12 Thousands - 17 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 12000,
+          "max": 17000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69ba349b652925f7ba217fbc",
+      "source": {
+        "offeredSalary": "12 Thousands - 17 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 12000,
+          "max": 17000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69ba4876652925f7ba2184cd",
+      "source": {
+        "offeredSalary": "12 Thousands - 15 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 12000,
+          "max": 15000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69ba49b6652925f7ba218596",
+      "source": {
+        "offeredSalary": "20 Thousands - 25 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20000,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69ba4c6f652925f7ba21887f",
+      "source": {
+        "offeredSalary": "2.5 Lakhs - 3 Lakhs",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20833,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69ba504e652925f7ba218d57",
+      "source": {
+        "offeredSalary": "12 Thousands - 18 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 12000,
+          "max": 18000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69ba633b652925f7ba2195b9",
+      "source": {
+        "offeredSalary": "15K - 20K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 20000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69ba63fc652925f7ba219816",
+      "source": {
+        "offeredSalary": "20K - 25K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20000,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69ba6750652925f7ba21f4e9",
+      "source": {
+        "offeredSalary": "15K - 20K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 20000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69ba683e652925f7ba220c87",
+      "source": {
+        "offeredSalary": "20K - 25K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20000,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69ba6bdb652925f7ba225cfc",
+      "source": {
+        "offeredSalary": "15K - 25K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69bbca15b2d50a287120c6c8",
+      "source": {
+        "offeredSalary": "15 Thousands - 25 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69bbcdc8b2d50a287120cde1",
+      "source": {
+        "offeredSalary": "5 Thousands - 10 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 5000,
+          "max": 10000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69bbea0bb2d50a287120df52",
+      "source": {
+        "offeredSalary": "18 Thousands - 23 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 18000,
+          "max": 23000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69bbec37b2d50a287120fa9d",
+      "source": {
+        "offeredSalary": "18 Thousands - 23 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 18000,
+          "max": 23000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69bd1913b2d50a2871216204",
+      "source": {
+        "offeredSalary": "12 Thousands - 13.5 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 12000,
+          "max": 13500,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69bd19b6b2d50a28712162f0",
+      "source": {
+        "offeredSalary": "18 Thousands - 20 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 18000,
+          "max": 20000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69bd3493b2d50a28712174e1",
+      "source": {
+        "offeredSalary": "15 Lakhs - 17 Lakhs",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 125000,
+          "max": 141667,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69bd3571b2d50a28712175bd",
+      "source": {
+        "offeredSalary": "50K - 55K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 50000,
+          "max": 55000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69d3430ef210f879559b77c1",
+      "source": {
+        "offeredSalary": "15 Thousands - 25 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69d3455bf210f879559b7895",
+      "source": {
+        "offeredSalary": "2.5 Lakhs - 3 Lakhs",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20833,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69d34888f210f879559b7a42",
+      "source": {
+        "offeredSalary": "16 Thousands - 18 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 16000,
+          "max": 18000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69d349c0f210f879559b7b19",
+      "source": {
+        "offeredSalary": "16 Thousands - 18 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 16000,
+          "max": 18000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69d34beef210f879559b7c17",
+      "source": {
+        "offeredSalary": "3 Lakhs - 6 Lakhs",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 25000,
+          "max": 50000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69e70c4afcf0f190766374d8",
+      "source": {
+        "offeredSalary": "12 Thousands - 15 Thousands",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 12000,
+          "max": 15000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "69f9e33e78ef9b4817c6bd07",
+      "source": {
+        "offeredSalary": "12K - 20K /Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 12000,
+          "max": 20000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a059ca8e82d55a87882291a",
+      "source": {
+        "offeredSalary": "2.5 - 3.5 LPA",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20833,
+          "max": 29167,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a05ae20e82d55a878824263",
+      "source": {
+        "offeredSalary": "15K - 21K /Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 21000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a06ef5a5bc20ab650935b2b",
+      "source": {
+        "offeredSalary": "2.5 - 3 LPA",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20833,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a06f1195bc20ab650935e6e",
+      "source": {
+        "offeredSalary": "2.5 - 3 LPA",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20833,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a06f2165bc20ab650935fef",
+      "source": {
+        "offeredSalary": "2.5 - 3 LPA",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20833,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a06f31f5bc20ab65093617a",
+      "source": {
+        "offeredSalary": "2.5 - 3.5 LPA",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20833,
+          "max": 29167,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a06f4455bc20ab650936300",
+      "source": {
+        "offeredSalary": "2.5 - 3 LPA",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20833,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a0812e95bc20ab65094d2cf",
+      "source": {
+        "offeredSalary": "15K - 20K /Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 20000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a0827265bc20ab65094eaf8",
+      "source": {
+        "offeredSalary": "5K - 6K /Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 5000,
+          "max": 6000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a08687e5bc20ab6509581fc",
+      "source": {
+        "offeredSalary": "15K - 17K /Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 17000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a0ab7515bc20ab650b07581",
+      "source": {
+        "offeredSalary": "22K - 24K /Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 22000,
+          "max": 24000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a0ac7ba5bc20ab650b1a153",
+      "source": {
+        "offeredSalary": "50K - 59K /Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 50000,
+          "max": 59000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a0ac9145bc20ab650b1ba04",
+      "source": {
+        "offeredSalary": "20K - 40K /Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20000,
+          "max": 40000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a0aca255bc20ab650b1ca37",
+      "source": {
+        "offeredSalary": "15K - 30K /Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 30000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a0acb785bc20ab650b1de29",
+      "source": {
+        "offeredSalary": "15K - 28K /Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 28000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a0acec05bc20ab650b22fd8",
+      "source": {
+        "offeredSalary": "15K - 29K /Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 29000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a0acfeb5bc20ab650b24639",
+      "source": {
+        "offeredSalary": "15K - 15K /Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 15000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a0adbe85bc20ab650b3589a",
+      "source": {
+        "offeredSalary": "10K - 29K /Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 10000,
+          "max": 29000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a1014d43fc629d436ca4ed2",
+      "source": {
+        "offeredSalary": "12K - 20K /Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 12000,
+          "max": 20000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a1016973fc629d436ca54ea",
+      "source": {
+        "offeredSalary": "15K - 20K /Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 20000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a1019b13fc629d436ca6a7b",
+      "source": {
+        "offeredSalary": "15K - 25K /Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a101aff3fc629d436ca703d",
+      "source": {
+        "offeredSalary": "40K - 50K /Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 40000,
+          "max": 50000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a10247a3fc629d436ca86a7",
+      "source": {
+        "offeredSalary": "15K - 20K /Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 20000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a10264d3fc629d436ca8f85",
+      "source": {
+        "offeredSalary": "25K - 35K /Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 25000,
+          "max": 35000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a23e7ee87c6c3f9206441f3",
+      "source": {
+        "offeredSalary": "4 - 5 LPA",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 33333,
+          "max": 41667,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a23e98187c6c3f920644503",
+      "source": {
+        "offeredSalary": "3 - 4 LPA",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 25000,
+          "max": 33333,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a23f95087c6c3f92064695b",
+      "source": {
+        "offeredSalary": "6 - 8 LPA",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 50000,
+          "max": 66667,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a23f9f587c6c3f920646c4c",
+      "source": {
+        "offeredSalary": "6 - 8 LPA",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 50000,
+          "max": 66667,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a23fb0887c6c3f920648960",
+      "source": {
+        "offeredSalary": "8 - 8 LPA",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 66667,
+          "max": 66667,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a27a8e687c6c3f9208a2f4a",
+      "source": {
+        "offeredSalary": "3 - 3.6 LPA",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 25000,
+          "max": 30000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a27a98287c6c3f9208a30e7",
+      "source": {
+        "offeredSalary": "3 - 4 LPA",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 25000,
+          "max": 33333,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a27aa0f87c6c3f9208a3266",
+      "source": {
+        "offeredSalary": "2.5 - 2.8 LPA",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20833,
+          "max": 23333,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a27aa7887c6c3f9208a33db",
+      "source": {
+        "offeredSalary": "2.8 - 3 LPA",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 23333,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a290b26d31806c3e1a03dd4",
+      "source": {
+        "offeredSalary": "2.4 - 3 LPA",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20000,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a292657d31806c3e1a054da",
+      "source": {
+        "offeredSalary": "2.5 - 3 LPA",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20833,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a29278ad31806c3e1a06c9b",
+      "source": {
+        "offeredSalary": "25K - 30K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 25000,
+          "max": 30000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a2aa992d31806c3e1a555dc",
+      "source": {
+        "offeredSalary": "24K - 25K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 24000,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a33c78c3ddf301012dea702",
+      "source": {
+        "offeredSalary": "18K - 19K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 18000,
+          "max": 19000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a465a52bb49823492143381",
+      "source": {
+        "offeredSalary": "12K - 15K /Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 12000,
+          "max": 15000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a465c11bb49823492143d7a",
+      "source": {
+        "offeredSalary": "15K - 20K /Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 20000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a509072adc0827c15deee81",
+      "source": {
+        "offeredSalary": "2 - 3 LPA",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 16667,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a509188adc0827c15deffa8",
+      "source": {
+        "offeredSalary": "2 - 2 LPA",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 16667,
+          "max": 16667,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a509292adc0827c15df053d",
+      "source": {
+        "offeredSalary": "2 - 3 LPA",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 16667,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a50b08cadc0827c15dfdaa3",
+      "source": {
+        "offeredSalary": "20K - 25K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20000,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a50b18aadc0827c15dfddd2",
+      "source": {
+        "offeredSalary": "18K - 20K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 18000,
+          "max": 20000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a54a0c1adc0827c1507ead2",
+      "source": {
+        "offeredSalary": "12K - 14K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 12000,
+          "max": 14000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a54a8f6adc0827c1507f8fd",
+      "source": {
+        "offeredSalary": "12K - 20K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 12000,
+          "max": 20000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a54b15cadc0827c1508310e",
+      "source": {
+        "offeredSalary": "30 - 45 LPA",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 250000,
+          "max": 375000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a56088904448eef45caf43d",
+      "source": {
+        "offeredSalary": "13K - 18K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 13000,
+          "max": 18000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a560b8104448eef45cb0472",
+      "source": {
+        "offeredSalary": "15K - 18K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 18000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a560ebd04448eef45cb21a4",
+      "source": {
+        "offeredSalary": "15K - 17K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 17000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a560f5204448eef45cb2397",
+      "source": {
+        "offeredSalary": "15K - 22K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 22000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a56107a04448eef45cb2741",
+      "source": {
+        "offeredSalary": "18K - 19K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 18000,
+          "max": 19000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a57275d04448eef45cecc41",
+      "source": {
+        "offeredSalary": "1 - 10 LPA",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 8333,
+          "max": 83333,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a5727f504448eef45cecd6c",
+      "source": {
+        "offeredSalary": "18K - 20K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 18000,
+          "max": 20000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a572bd304448eef45ceeaaf",
+      "source": {
+        "offeredSalary": "20K - 25K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20000,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a59edbf04448eef45d92104",
+      "source": {
+        "offeredSalary": "12K - 20K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 12000,
+          "max": 20000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a59ee6b04448eef45d92447",
+      "source": {
+        "offeredSalary": "18K - 23K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 18000,
+          "max": 23000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a5a196904448eef45d9b84d",
+      "source": {
+        "offeredSalary": "18K - 23K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 18000,
+          "max": 23000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a5a1ac204448eef45d9bf80",
+      "source": {
+        "offeredSalary": "18K - 23K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 18000,
+          "max": 23000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a5a1bf704448eef45d9d53d",
+      "source": {
+        "offeredSalary": "20K - 25K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20000,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a5a236904448eef45d9fb36",
+      "source": {
+        "offeredSalary": "8K - 10K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 8000,
+          "max": 10000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a5a31e304448eef45da16e3",
+      "source": {
+        "offeredSalary": "18K - 23K /Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 18000,
+          "max": 23000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a5b0c0904448eef45dc5247",
+      "source": {
+        "offeredSalary": "14K - 15K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 14000,
+          "max": 15000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a5b0cb904448eef45dc5594",
+      "source": {
+        "offeredSalary": "30K - 35K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 30000,
+          "max": 35000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a5b4e6904448eef45dd7e4b",
+      "source": {
+        "offeredSalary": "25K - 40K /Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 25000,
+          "max": 40000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a5b4ffc04448eef45dd8018",
+      "source": {
+        "offeredSalary": "40K - 60K /Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 40000,
+          "max": 60000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a5b53c004448eef45dd8492",
+      "source": {
+        "offeredSalary": "25K - 28K /Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 25000,
+          "max": 28000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a5df3b004448eef45059190",
+      "source": {
+        "offeredSalary": "10K - 15K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 10000,
+          "max": 15000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a5dfa0c04448eef4506a3f6",
+      "source": {
+        "offeredSalary": "20K - 22K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20000,
+          "max": 22000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a5dfac604448eef4506cc95",
+      "source": {
+        "offeredSalary": "15K - 18K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 18000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a5dfb9004448eef4506ff06",
+      "source": {
+        "offeredSalary": "15K - 18K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 18000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a5dfc2404448eef4507125a",
+      "source": {
+        "offeredSalary": "15K - 17K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 17000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a5f0a5a04448eef4514e9f7",
+      "source": {
+        "offeredSalary": "16K - 25K /Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 16000,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a5f263504448eef45164422",
+      "source": {
+        "offeredSalary": "18K - 26K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 18000,
+          "max": 26000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a5f267104448eef45164451",
+      "source": {
+        "offeredSalary": "18K - 26K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 18000,
+          "max": 26000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a5f26ce04448eef45166880",
+      "source": {
+        "offeredSalary": "18K - 26K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 18000,
+          "max": 26000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a5f272204448eef4516782e",
+      "source": {
+        "offeredSalary": "18K - 26K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 18000,
+          "max": 26000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a60bcfcd651683ef2e17705",
+      "source": {
+        "offeredSalary": "12K - 15K /Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 12000,
+          "max": 15000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a6201f5d651683ef2e698a8",
+      "source": {
+        "offeredSalary": "23K - 25K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 23000,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a634aa1d651683ef2eb97df",
+      "source": {
+        "offeredSalary": "25K - 45K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 25000,
+          "max": 45000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a635455d651683ef2ebcc0a",
+      "source": {
+        "offeredSalary": "20K - 25K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20000,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a6354cfd651683ef2ebcdef",
+      "source": {
+        "offeredSalary": "20K - 23K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20000,
+          "max": 23000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a645344d651683ef2f189c0",
+      "source": {
+        "offeredSalary": "17K - 18K /Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 17000,
+          "max": 18000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a647eb3d651683ef2f4e11c",
+      "source": {
+        "offeredSalary": "8K - 9K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 8000,
+          "max": 9000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a648d26d651683ef2f566ca",
+      "source": {
+        "offeredSalary": "15K - 19K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 19000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a648db2d651683ef2f56a96",
+      "source": {
+        "offeredSalary": "15K - 17K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 17000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a648ef9d651683ef2f57089",
+      "source": {
+        "offeredSalary": "15K - 21K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 21000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a6497e2d651683ef2f5ee49",
+      "source": {
+        "offeredSalary": "2 - 4 LPA",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 16667,
+          "max": 33333,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a64ac86ad0fa486a775ea74",
+      "source": {
+        "offeredSalary": "25K - 30K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 25000,
+          "max": 30000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a671e4009350f5e061a19de",
+      "source": {
+        "offeredSalary": "12K - 14K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 12000,
+          "max": 14000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a671f2209350f5e061a1f75",
+      "source": {
+        "offeredSalary": "12K - 14K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 12000,
+          "max": 14000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a698d3b09350f5e06906081",
+      "source": {
+        "offeredSalary": "20K - 23K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20000,
+          "max": 23000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a698ede09350f5e06906657",
+      "source": {
+        "offeredSalary": "20K - 23K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20000,
+          "max": 23000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a698f6109350f5e0690685a",
+      "source": {
+        "offeredSalary": "15K - 18K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 18000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a69904e09350f5e06906c2c",
+      "source": {
+        "offeredSalary": "15K - 18K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 18000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a69af7509350f5e0691dd8f",
+      "source": {
+        "offeredSalary": "18K - 18K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 18000,
+          "max": 18000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a69aff409350f5e06921637",
+      "source": {
+        "offeredSalary": "18K - 20K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 18000,
+          "max": 20000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a69b3b109350f5e069226c3",
+      "source": {
+        "offeredSalary": "18K - 20K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 18000,
+          "max": 20000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a69d19409350f5e069447bd",
+      "source": {
+        "offeredSalary": "20K - 25K /Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20000,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a69e1eb09350f5e06957ff0",
+      "source": {
+        "offeredSalary": "15K - 16K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 16000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a69ea0c09350f5e06978cf9",
+      "source": {
+        "offeredSalary": "10K - 15K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 10000,
+          "max": 15000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a69f17a09350f5e06985292",
+      "source": {
+        "offeredSalary": "15K - 18K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 18000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a69f2a709350f5e069856c3",
+      "source": {
+        "offeredSalary": "15K - 18K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 18000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a6b112709350f5e069e565f",
+      "source": {
+        "offeredSalary": "12K - 20K /Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 12000,
+          "max": 20000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a6b22f809350f5e069ef215",
+      "source": {
+        "offeredSalary": "16K - 17K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 16000,
+          "max": 17000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a6b23bd09350f5e069ef9b9",
+      "source": {
+        "offeredSalary": "17K - 19K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 17000,
+          "max": 19000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a6b2d004db17a0386778c0c",
+      "source": {
+        "offeredSalary": "10K - 12K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 10000,
+          "max": 12000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a6b2dcf4db17a038677ad64",
+      "source": {
+        "offeredSalary": "10K - 12K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 10000,
+          "max": 12000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a6b2e754db17a038677b940",
+      "source": {
+        "offeredSalary": "10K - 12K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 10000,
+          "max": 12000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a6b2ef74db17a038677c2b6",
+      "source": {
+        "offeredSalary": "20K - 25K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20000,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a6b32f94db17a03867831a4",
+      "source": {
+        "offeredSalary": "15K - 18K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 18000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a6b34164db17a0386785e86",
+      "source": {
+        "offeredSalary": "15K - 18K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 18000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a6b3ba74db17a038678f298",
+      "source": {
+        "offeredSalary": "20K - 25K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20000,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a6b3bbb4db17a038678f686",
+      "source": {
+        "offeredSalary": "2 - 3 LPA",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 16667,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a6c33ec4db17a038686dd6d",
+      "source": {
+        "offeredSalary": "13K - 17K /Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 13000,
+          "max": 17000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a6c35474db17a0386871132",
+      "source": {
+        "offeredSalary": "12K - 15K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 12000,
+          "max": 15000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a6c366b4db17a0386872a2d",
+      "source": {
+        "offeredSalary": "25K - 33K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 25000,
+          "max": 33000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a6c37b14db17a03868744ca",
+      "source": {
+        "offeredSalary": "35K - 55K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 35000,
+          "max": 55000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a6c393d4db17a0386875bbc",
+      "source": {
+        "offeredSalary": "70K - 90K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 70000,
+          "max": 90000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a6c3a0f4db17a03868786cd",
+      "source": {
+        "offeredSalary": "50K - 70K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 50000,
+          "max": 70000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a6d7e3a4db17a0386b98b8a",
+      "source": {
+        "offeredSalary": "2 - 3 LPA",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 16667,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a6d7f5d4db17a0386b98feb",
+      "source": {
+        "offeredSalary": "2 - 3 LPA",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 16667,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a6d7fd84db17a0386b99221",
+      "source": {
+        "offeredSalary": "2 - 3 LPA",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 16667,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a6d80e24db17a0386b99494",
+      "source": {
+        "offeredSalary": "3 - 5 LPA",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 25000,
+          "max": 41667,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a6d813f4db17a0386b996c5",
+      "source": {
+        "offeredSalary": "2 - 3 LPA",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 16667,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a6d82a34db17a0386b9a152",
+      "source": {
+        "offeredSalary": "2 - 3 LPA",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 16667,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a6d830d4db17a0386b9a56a",
+      "source": {
+        "offeredSalary": "2 - 3 LPA",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 16667,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a6d8fa74db17a0386ba4e32",
+      "source": {
+        "offeredSalary": "14K - 15K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 14000,
+          "max": 15000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a6d90de4db17a0386ba53ab",
+      "source": {
+        "offeredSalary": "14K - 15K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 14000,
+          "max": 15000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a6d96a84db17a0386ba9afb",
+      "source": {
+        "offeredSalary": "15K - 20K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 20000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a707a8c4db17a0386d6ecfc",
+      "source": {
+        "offeredSalary": "20K - 25K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20000,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a708a964db17a0386dbd67d",
+      "source": {
+        "offeredSalary": "20K - 25K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20000,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a708b0f4db17a0386dbff42",
+      "source": {
+        "offeredSalary": "20K - 25K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20000,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a708b734db17a0386dc1d41",
+      "source": {
+        "offeredSalary": "20K - 25K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 20000,
+          "max": 25000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a71d2c0144964f030e5d3b4",
+      "source": {
+        "offeredSalary": "15K - 20K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 15000,
+          "max": 20000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a71d39f144964f030e5eb06",
+      "source": {
+        "offeredSalary": "25K - 30K/Month",
+        "salary": null,
+        "detectedPeriod": "monthly"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 25000,
+          "max": 30000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a71db4e144964f030e62c63",
+      "source": {
+        "offeredSalary": "3 - 6 LPA",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 25000,
+          "max": 50000,
+          "source": "parsed"
+        }
+      }
+    },
+    {
+      "documentId": "6a72f08b144964f030eaa369",
+      "source": {
+        "offeredSalary": "12 - 18 LPA",
+        "salary": null,
+        "detectedPeriod": "annual"
+      },
+      "oldValues": {
+        "salaryNorm": null
+      },
+      "newValues": {
+        "salaryNorm": {
+          "min": 100000,
+          "max": 150000,
+          "source": "parsed"
+        }
+      }
+    }
+  ]
+}
