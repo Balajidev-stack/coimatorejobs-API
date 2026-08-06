@@ -11,10 +11,16 @@
     "migrate:industry": "node seeds/industryMigration.js",
     "migrate:job-slugs": "node seeds/jobSlugMigration.js",
     "migrate:job-slugs:apply": "node seeds/jobSlugMigration.js --apply",
+    "migrate:experience": "node seeds/experienceNormalization.js",
+    "migrate:experience:apply": "node seeds/experienceNormalization.js --apply",
+    "migrate:salary-norm": "node seeds/salaryNormalization.js",
+    "migrate:salary-norm:apply": "node seeds/salaryNormalization.js --apply",
+    "migrate:company-slugs": "node seeds/companySlugMigration.js",
+    "migrate:company-slugs:apply": "node seeds/companySlugMigration.js --apply",
     "bootstrap:prod": "npm run seed:categories",
     "start:prod": "npm run bootstrap:prod && node app.js",
     "postinstall": "npx puppeteer browsers install chrome --path ./.cache/puppeteer",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test \"tests/**/*.test.js\""
   },
   "keywords": [],
   "author": "",

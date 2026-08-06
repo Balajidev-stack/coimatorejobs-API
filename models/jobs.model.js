@@ -11,6 +11,7 @@ import { sendJobAlertEmail } from '../utils/mailer.js';
 import { createNotification, notificationPresets } from '../utils/notificationHelper.js';
 import { sendPushToUsers } from '../utils/fcm.js';
 import { buildCanonicalJobSlug } from '../utils/jobSlug.js';
+import { deriveExperienceRange, deriveSalaryNorm } from '../utils/jobNormalization.js';
 
 export const COLLAR_CATEGORIES = [
   'Blue Collar',
@@ -36,6 +37,22 @@ const salarySchema = new mongoose.Schema({
     enum: ['HOUR', 'DAY', 'WEEK', 'MONTH', 'YEAR'],
     default: 'YEAR',
   },
+}, { _id: false });
+
+// DERIVED, QUERY-ONLY salary shape — normalized to INR per MONTH.
+//
+// This is NOT a replacement for `salary` above and never overwrites it.
+// `salary` is employer-entered and feeds the Google JobPosting baseSalary;
+// `salaryNorm` is machine-derived (utils/jobNormalization.js) purely so the
+// ?salary=<min>-<max> filter can run as an indexed numeric range instead of
+// parsing free text at query time.
+//
+// `source` records which input won ('structured' = the salary sub-document,
+// 'parsed' = the offeredSalary string) so backfill coverage can be audited.
+const salaryNormSchema = new mongoose.Schema({
+  min: { type: Number, min: 0 },
+  max: { type: Number, min: 0 },
+  source: { type: String, enum: ['structured', 'parsed'] },
 }, { _id: false });
 
 const jobPostSchema = new mongoose.Schema({
@@ -105,6 +122,34 @@ const jobPostSchema = new mongoose.Schema({
     required: [true, 'Experience is required'],
     // enum: ['Fresher', '1-3 years', '3-5 years', '5-10 years', '10+ years'],
   },
+
+  // ----------------------- DERIVED FILTER FIELDS -----------------------
+  // Machine-derived from `experience` / `offeredSalary` / `salary` by
+  // utils/jobNormalization.js. They exist ONLY so the query engine can run
+  // ?experience= and ?salary= as indexed numeric ranges — free-text strings
+  // cannot be range-matched in a Mongo query.
+  //
+  // All three are optional with `default: undefined`, so existing documents
+  // are untouched until the backfill migrations run and no existing read path
+  // observes any change. A value that cannot be confidently parsed is left
+  // ABSENT, which excludes the job from a range filter — deliberate, and
+  // documented in the API contract.
+  //
+  // Units: experienceMin/Max in YEARS, salaryNorm in INR per MONTH.
+  // Open-ended experience ("10+ years") stores max = 99 (EXPERIENCE_OPEN_ENDED_MAX).
+  experienceMin: {
+    type: Number,
+    default: undefined,
+  },
+  experienceMax: {
+    type: Number,
+    default: undefined,
+  },
+  salaryNorm: {
+    type: salaryNormSchema,
+    default: undefined,
+  },
+  // ---------------------------------------------------------------------
   gender: {
     type: String,
     // enum: ['Male', 'Female', 'Other', 'No Preference'],
@@ -391,6 +436,35 @@ jobPostSchema.pre("save", async function (next) {
       ];
     }
 
+    // ---------- DERIVED FILTER FIELDS ----------
+    // Deliberately LAST, deliberately in its OWN try/catch, and deliberately
+    // never touching this.slug.
+    //
+    // The post('save') hooks below send job-alert emails, in-app notifications
+    // and FCM pushes. A throw anywhere in this pre-save hook aborts the save
+    // entirely — no job created and no alerts delivered. Derivation is a
+    // convenience for filtering, never a reason to fail a write, so any parse
+    // failure degrades to "field absent" and the save proceeds.
+    try {
+      if (this.isNew || this.isModified('experience')) {
+        const range = deriveExperienceRange(this);
+        if (range) {
+          this.experienceMin = range.min;
+          this.experienceMax = range.max;
+        } else {
+          this.experienceMin = undefined;
+          this.experienceMax = undefined;
+        }
+      }
+
+      if (this.isNew || this.isModified('offeredSalary') || this.isModified('salary')) {
+        const norm = deriveSalaryNorm(this);
+        this.salaryNorm = norm || undefined;
+      }
+    } catch (derivationError) {
+      console.error('Derived filter field generation skipped:', derivationError?.message || derivationError);
+    }
+
     next();
 
   } catch (err) {
@@ -433,6 +507,62 @@ jobPostSchema.pre("findOneAndUpdate", async function (next) {
         else update.slug = generated;
         this.setUpdate(update);
       }
+    }
+
+    // ---------- DERIVED FILTER FIELDS (update path) ----------
+    // Keeps experienceMin/Max and salaryNorm in step when an employer edits
+    // experience or salary through updateJobPost (which uses findOneAndUpdate
+    // and therefore never runs the pre('save') hook above).
+    //
+    // Own try/catch for the same reason as the save path: a parse failure must
+    // never fail an employer's job edit.
+    try {
+      const nextUpdate = this.getUpdate() || {};
+      const $set = nextUpdate.$set || {};
+      const pick = (field) => ($set[field] !== undefined ? $set[field] : nextUpdate[field]);
+
+      const experienceChanged = pick('experience') !== undefined;
+      const salaryChanged =
+        pick('offeredSalary') !== undefined || pick('salary') !== undefined;
+
+      // Also backfill when the derived fields are simply missing on a legacy
+      // document, so an ordinary edit heals it without a migration re-run.
+      const needsExperienceBackfill =
+        existing.experienceMin === undefined || existing.experienceMin === null;
+      const needsSalaryBackfill = !existing.salaryNorm;
+
+      const writeDerived = (field, value) => {
+        if (nextUpdate.$set) nextUpdate.$set[field] = value;
+        else nextUpdate[field] = value;
+      };
+
+      let touched = false;
+
+      if (experienceChanged || needsExperienceBackfill) {
+        const range = deriveExperienceRange({
+          experience: pick('experience') ?? existing.experience,
+        });
+        if (range) {
+          writeDerived('experienceMin', range.min);
+          writeDerived('experienceMax', range.max);
+          touched = true;
+        }
+      }
+
+      if (salaryChanged || needsSalaryBackfill) {
+        const norm = deriveSalaryNorm({
+          offeredSalary: pick('offeredSalary') ?? existing.offeredSalary,
+          salary: pick('salary') ?? existing.salary,
+        });
+        if (norm) {
+          writeDerived('salaryNorm', norm);
+          touched = true;
+        }
+      }
+
+      if (touched) this.setUpdate(nextUpdate);
+    } catch (derivationError) {
+      console.error('Derived filter field update skipped:', derivationError?.message || derivationError);
     }
 
     next();
@@ -614,6 +744,31 @@ jobPostSchema.index({ role: 1 });
 jobPostSchema.index({ 'location.city': 1 });
 jobPostSchema.index({ skills: 1 });
 jobPostSchema.index({ "uniqueViewers.viewer": 1 });
+
+// ------------------- QUERY ENGINE INDEXES (additive) -------------------
+// Every index below is NEW. None of the six above is dropped or altered.
+//
+// Nothing was previously indexed on `status`, which was tolerable while the
+// listing endpoint returned the whole collection unsorted-by-index. Once the
+// query engine adds skip/limit + an explicit sort, an unindexed sort becomes a
+// hard failure: MongoDB aborts in-memory sorts above 32 MB.
+//
+// The trailing `_id: -1` is deliberate. The query engine sorts by
+// { createdAt: -1, _id: -1 } so that ties cannot reshuffle between pages
+// (which would drop or duplicate rows across a paginated set). Including _id
+// as an explicit index key keeps that full sort index-supported. Mongo can
+// walk these indexes in reverse to satisfy the { createdAt: 1, _id: 1 }
+// ordering used by sort=oldest, so one index serves both directions.
+jobPostSchema.index({ status: 1, createdAt: -1, _id: -1 });
+jobPostSchema.index({ status: 1, 'location.city': 1, createdAt: -1, _id: -1 });
+jobPostSchema.index({ status: 1, industry: 1, createdAt: -1, _id: -1 });
+jobPostSchema.index({ status: 1, role: 1, createdAt: -1, _id: -1 });
+// `companyProfile` had no index of any kind before this line.
+jobPostSchema.index({ status: 1, companyProfile: 1, createdAt: -1, _id: -1 });
+jobPostSchema.index({ status: 1, skills: 1, createdAt: -1, _id: -1 });
+jobPostSchema.index({ status: 1, experienceMin: 1, experienceMax: 1 });
+jobPostSchema.index({ status: 1, 'salaryNorm.min': 1, 'salaryNorm.max': 1 });
+// -----------------------------------------------------------------------
 
 const JobPost = mongoose.model('JobPost', jobPostSchema);
 

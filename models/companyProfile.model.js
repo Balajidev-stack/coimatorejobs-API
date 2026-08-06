@@ -65,6 +65,27 @@ const companyProfileSchema = new mongoose.Schema({
     minlength: 2,
     maxlength: 100
   },
+  // URL slug for the public company jobs landing page (/jobs/company/{slug}).
+  //
+  // Derived from companyName by utils/jobSlug.js -> normalizeCompanyName, the
+  // SAME function that produced the company segment of every existing job slug.
+  // Using a second slugifier here would make company URLs disagree with the
+  // company part already embedded in job URLs.
+  //
+  // Deliberately NOT `unique`: duplicate companyName values exist in production
+  // and a unique index would fail to build. The migration resolves collisions
+  // with -2/-3 suffixes; tighten to unique only after it reports zero.
+  //
+  // Optional: absent slugs are harmless. The landing route resolves companies
+  // from published jobs by name, so it works with or without this field.
+  slug: {
+    type: String,
+    trim: true,
+    lowercase: true,
+    index: true,
+    sparse: true,
+    default: undefined
+  },
   companyType: {
     type: String,
     enum: ['Private', 'Public', 'Government', 'Non-profit', 'Startup', 'Other'],

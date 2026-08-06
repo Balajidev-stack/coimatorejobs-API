@@ -28,6 +28,15 @@ import fs from 'fs';
 import path from 'path';
 import natural from 'natural';  //library (for TF-IDF / cosine similarity)
 import crypto from 'crypto';
+import {
+  hasQueryTrigger,
+  parseJobQuery,
+  buildJobFilter,
+  buildSortSpec,
+  buildPagination,
+  buildAppliedFilters,
+} from '../utils/jobQueryFilter.js';
+import { resolveJobQueryTaxonomy } from '../utils/jobTaxonomyResolver.js';
 
 const candidateController = {};
 const CANDIDATE_ID_PREFIX = "CND";
@@ -1126,9 +1135,29 @@ candidateController.getPendingCandidateProfiles = async (req, res, next) => {
 
 
 /**
- * Retrieves all published job posts for candidates to view
+ * Retrieves published job posts for candidates to view.
+ *
  * @route GET /api/v1/candidate-dashboard/jobs
  * @access Public
+ *
+ * TWO PATHS — see utils/jobQueryFilter.js for the full rationale.
+ *
+ *   LEGACY PATH (no Query Engine parameter present)
+ *     Executes exactly as it always has: every Published job, fully populated,
+ *     unpaginated, sorted { createdAt: -1 }, responding { success, jobPosts }.
+ *     This response is byte-identical to the pre-Query-Engine behaviour and
+ *     must stay that way — the frontend sitemap builder and the legacy job-URL
+ *     reconciler both depend on receiving the COMPLETE list, and the homepage
+ *     search box already sends ?keyword= here (which is deliberately NOT a
+ *     trigger).
+ *
+ *   FILTERED PATH (at least one Query Engine parameter present)
+ *     Server-side filtering, sorting and pagination. Adds `pagination` and
+ *     `appliedFilters` as NEW keys; `jobPosts` keeps the same name and the same
+ *     element shape.
+ *
+ * The employer plan gate stays the first statement in the handler so it is
+ * enforced identically on both paths.
  */
 candidateController.getAllJobPosts = async (req, res, next) => {
   try {
@@ -1142,18 +1171,59 @@ candidateController.getAllJobPosts = async (req, res, next) => {
       if (!access.allowed) return;
     }
 
-    const jobPosts = await JobPost.find({ status: 'Published' })
-      .populate('companyProfile', 'companyName logo publicPhone phone') 
-      .populate('skills', 'name slug keywords') // Required Skills matching: name + slug + keywords
-      .populate('industry', 'name')         // Populates industry for FilterJobsBox
-      .populate('functionalAreas', 'name')  // Populates functional areas for FilterJobsBox
-      .populate('role', 'name defaultCollarCategory')             // Populates role for FilterJobsBox
-      .select('-__v -applicantCount') 
-      .sort({ createdAt: -1 }); 
+    // ---------------------------------------------------------------------
+    // LEGACY PATH — do not refactor, do not optimize, do not add .lean().
+    // Copied verbatim from the pre-Query-Engine implementation.
+    // ---------------------------------------------------------------------
+    if (!hasQueryTrigger(req.query)) {
+      const jobPosts = await JobPost.find({ status: 'Published' })
+        .populate('companyProfile', 'companyName logo publicPhone phone')
+        .populate('skills', 'name slug keywords') // Required Skills matching: name + slug + keywords
+        .populate('industry', 'name')         // Populates industry for FilterJobsBox
+        .populate('functionalAreas', 'name')  // Populates functional areas for FilterJobsBox
+        .populate('role', 'name defaultCollarCategory')             // Populates role for FilterJobsBox
+        .select('-__v -applicantCount')
+        .sort({ createdAt: -1 });
 
+      return res.status(200).json({
+        success: true,
+        jobPosts: jobPosts.map((job) => applyCurrentRoleCollarCategory(job)),
+      });
+    }
+
+    // ---------------------------------------------------------------------
+    // FILTERED PATH
+    // ---------------------------------------------------------------------
+    const parsed = parseJobQuery(req.query);
+    const resolved = await resolveJobQueryTaxonomy(parsed);
+    const filter = buildJobFilter(parsed, resolved);
+    const sort = buildSortSpec(parsed.sort);
+
+    // countDocuments runs alongside the find rather than after it, so
+    // pagination metadata costs no extra round-trip latency.
+    const [total, jobPosts] = await Promise.all([
+      JobPost.countDocuments(filter),
+      JobPost.find(filter)
+        .populate('companyProfile', 'companyName logo publicPhone phone')
+        .populate('skills', 'name slug keywords')
+        .populate('industry', 'name')
+        .populate('functionalAreas', 'name')
+        .populate('role', 'name defaultCollarCategory')
+        .select('-__v -applicantCount')
+        .sort(sort)
+        .skip(parsed.skip)
+        .limit(parsed.limit)
+        .lean(),
+    ]);
+
+    // A page beyond the end returns an empty array with HTTP 200 and correct
+    // pagination metadata — never a 404. Job data shifts constantly, and
+    // 404-ing a transiently out-of-range page produces soft-404 churn.
     return res.status(200).json({
       success: true,
       jobPosts: jobPosts.map((job) => applyCurrentRoleCollarCategory(job)),
+      pagination: buildPagination(parsed, total),
+      appliedFilters: buildAppliedFilters(parsed, resolved),
     });
   } catch (error) {
     next(error);
