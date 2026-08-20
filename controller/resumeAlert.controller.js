@@ -5,6 +5,7 @@ import { BadRequestError, NotFoundError } from '../utils/errors.js';
 import { sendResumeAlertEmail } from '../utils/mailer.js';
 import { matchResumeToAlert } from '../utils/resumeMatching.js'; 
 import { requireEmployerResumeAlertLimit } from '../utils/employerPlanAccess.js';
+import { getEffectiveEmployerId } from '../utils/roleHelper.js';
 import EventEmitter from 'events';
 
 const alertEmitter = new EventEmitter();
@@ -59,7 +60,7 @@ const sanitizeCriteria = (criteria) => {
  */
 resumeAlertController.createResumeAlert = async (req, res, next) => {
   try {
-    const employerId = req.user.id || req.user._id;
+    const employerId = getEffectiveEmployerId(req.user);
     let { title, criteria, frequency } = req.body;
 
     const canCreateByPlan = await requireEmployerResumeAlertLimit(req, res);
@@ -114,7 +115,7 @@ resumeAlertController.createResumeAlert = async (req, res, next) => {
  */
 resumeAlertController.updateResumeAlert = async (req, res, next) => {
   try {
-    const employerId = req.user.id || req.user._id;
+    const employerId = getEffectiveEmployerId(req.user);
     const alertId = req.params.id;
     let { title, criteria, frequency } = req.body;
 
@@ -162,7 +163,7 @@ resumeAlertController.updateResumeAlert = async (req, res, next) => {
  */
 resumeAlertController.deleteResumeAlert = async (req, res, next) => {
   try {
-    const employerId = req.user.id;
+    const employerId = getEffectiveEmployerId(req.user);
     const alertId = req.params.id;
 
     const alert = await ResumeAlert.findById(alertId);
@@ -188,7 +189,7 @@ resumeAlertController.deleteResumeAlert = async (req, res, next) => {
  */
 resumeAlertController.listResumeAlerts = async (req, res, next) => {
   try {
-    const employerId = req.user.id || req.user._id;
+    const employerId = getEffectiveEmployerId(req.user);
 
     // Fetch alerts for employer and populate taxonomy names for the frontend
     const alerts = await ResumeAlert.find({ employer: employerId })
@@ -255,7 +256,7 @@ resumeAlertController.listResumeAlerts = async (req, res, next) => {
  */
 resumeAlertController.getAlertMatches = async (req, res, next) => {
   try {
-    const employerId = req.user.id;
+    const employerId = getEffectiveEmployerId(req.user);
     const alertId = req.params.id;
     const { page = 1, limit = 10 } = req.query;
 

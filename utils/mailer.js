@@ -893,6 +893,59 @@ const sendJobApplicationNotificationEmail = async ({ employerEmail, employerName
   }
 };
 
+const sendEmployerApplicantsReleasedEmail = async ({
+  employerEmail,
+  employerName,
+  jobTitle,
+  companyName,
+  releasedCount,
+  totalReleasedCount,
+  dashboardLink,
+}) => {
+  try {
+    if (!employerEmail) throw new Error('Employer email is missing');
+
+    const safeReleasedCount = Number(releasedCount || 0);
+    const safeTotalReleasedCount = Number(totalReleasedCount || safeReleasedCount);
+
+    await sendMail({
+      from: `"Coimbatore Jobs Applications" <${defaultFromAddress}>`,
+      to: employerEmail,
+      subject: `${safeTotalReleasedCount} candidates available for ${jobTitle}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1e293b;">
+          <h2 style="color: #2563eb;">Candidates Are Ready to Review</h2>
+          <p>Dear ${escapeHtml(employerName || 'Employer')},</p>
+          <p>Our admin team has reviewed and released candidates for your job role.</p>
+
+          <div style="background: #f0f9ff; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #2563eb;">
+            <p style="margin: 5px 0;"><strong>Job Title:</strong> ${escapeHtml(jobTitle || 'Job Role')}</p>
+            <p style="margin: 5px 0;"><strong>Company:</strong> ${escapeHtml(companyName || 'Company')}</p>
+            <p style="margin: 5px 0;"><strong>New Candidates Released:</strong> ${safeReleasedCount}</p>
+            <p style="margin: 5px 0;"><strong>Total Candidates Available:</strong> ${safeTotalReleasedCount}</p>
+          </div>
+
+          <p>${safeTotalReleasedCount} candidates have applied for this job role and are now available in your dashboard. Please check your dashboard and start the hiring process.</p>
+
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${dashboardLink}"
+               style="background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+              View Candidates
+            </a>
+          </div>
+
+          <p style="color: #64748b; font-size: 12px; text-align: center;">
+            &copy; ${new Date().getFullYear()} Coimbatore Jobs by Cispro. All rights reserved.
+          </p>
+        </div>
+      `,
+    });
+    console.log(`Released applicants email sent to ${employerEmail}`);
+  } catch (error) {
+    console.error(`Failed to send released applicants email to ${employerEmail}:`, error);
+  }
+};
+
 // Send job application confirmation email to candidate
 const sendCandidateApplicationConfirmationEmail = async ({ candidateEmail, candidateName, jobTitle, companyName, jobId }) => {
   try {
@@ -1094,12 +1147,14 @@ const sendEmployerJobPostedEmail = async ({
 }) => {
   try {
     if (!recipient) throw new Error('Employer email is missing');
-    const actionLink = jobDetailsLink || dashboardLink || resolveFrontendBaseUrl();
-    const subjectPrefix = postedByAdmin ? 'New Job Posted by Coimbatore Jobs Administration' : 'Job Posted Successfully';
+    const actionLink = postedByAdmin
+      ? (dashboardLink || resolveFrontendBaseUrl('/employers-dashboard/manage-jobs'))
+      : (jobDetailsLink || dashboardLink || resolveFrontendBaseUrl());
+    const subjectPrefix = postedByAdmin ? 'Action Required: Approve Job Posted for Your Company' : 'Job Posted Successfully';
     const introText = postedByAdmin
-      ? 'Coimbatore Jobs administration has posted a new job on behalf of your company.'
+      ? 'Coimbatore Jobs Administration has created a job post for your company. Please check the job details in your Manage Jobs page and approve it to publish the job.'
       : 'Your new job has been posted successfully on Coimbatore Jobs.';
-    const titleText = postedByAdmin ? 'New Job Posted by Coimbatore Jobs Administration' : 'Your Job Post is Live';
+    const titleText = postedByAdmin ? 'Please Approve This Job Post' : 'Your Job Post is Live';
     const detailRows = [
       ['Job Title', jobTitle],
       ['Company', companyName],
@@ -1141,11 +1196,11 @@ const sendEmployerJobPostedEmail = async ({
                 ${detailRows}
               </tbody>
             </table>
-            <p>Please review the job details and let us know if any changes are required.</p>
+            <p>${postedByAdmin ? 'Click the button below to open Manage Jobs, review the details, and approve or ignore this job post.' : 'Please review the job details and let us know if any changes are required.'}</p>
             <div style="text-align: center; margin: 30px 0;">
               <a href="${escapeHtml(actionLink)}"
                  style="background: #2563eb; color: white; padding: 13px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 700;">
-                View Job Details
+                ${postedByAdmin ? 'Open Manage Jobs' : 'View Job Details'}
               </a>
             </div>
             <p style="margin-bottom: 0;">Regards,<br><strong>Coimbatore Jobs Administration</strong></p>
@@ -1327,5 +1382,5 @@ const sendPlanReceiptEmail = async ({
   }
 };
 
-export { sendJobAlertEmail, sendJobAlertSetupConfirmationEmail, sendResumeAlertEmail, sendPasswordResetEmail, sendLoginOtpEmail, sendWelcomeEmail, sendSuperadminAlertEmail, sendUserStatusUpdateEmail, sendPasswordResetSuccessEmail, sendAdminPasswordResetEmail, sendProfileDeletionEmail, sendCandidateAccountDeletedAlertEmail, sendCompanyProfileStatusEmail, sendCandidateProfileStatusEmail, sendJobApplicationNotificationEmail, sendCandidateApplicationConfirmationEmail, sendApplicationStatusUpdateEmail, sendEmployerJobPostedEmail, sendDemandCandidateStatusEmail, sendPlanReceiptEmail };
+export { sendJobAlertEmail, sendJobAlertSetupConfirmationEmail, sendResumeAlertEmail, sendPasswordResetEmail, sendLoginOtpEmail, sendWelcomeEmail, sendSuperadminAlertEmail, sendUserStatusUpdateEmail, sendPasswordResetSuccessEmail, sendAdminPasswordResetEmail, sendProfileDeletionEmail, sendCandidateAccountDeletedAlertEmail, sendCompanyProfileStatusEmail, sendCandidateProfileStatusEmail, sendJobApplicationNotificationEmail, sendEmployerApplicantsReleasedEmail, sendCandidateApplicationConfirmationEmail, sendApplicationStatusUpdateEmail, sendEmployerJobPostedEmail, sendDemandCandidateStatusEmail, sendPlanReceiptEmail };
 

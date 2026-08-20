@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import JobPost from '../models/jobs.model.js';
 import CompanyProfile from '../models/companyProfile.model.js';
 import User from '../models/user.model.js';
+import Application from '../models/jobApply.model.js';
 import Role from '../models/role.model.js';
 import Location from '../models/location.model.js';
 import Skill from '../models/skill.model.js';
@@ -22,6 +23,7 @@ import {
   requireEmployerJobPostLimit,
   resolveEmployerPlan,
 } from '../utils/employerPlanAccess.js';
+import { getEffectiveEmployerId } from '../utils/roleHelper.js';
 import crypto from 'crypto';
 
 const jobsController = {};
@@ -430,7 +432,7 @@ jobsController.createJobPost = async (req, res, next) => {
      * superadmin   → must pass employerId
      */
 
-    let employerId = loggedInUserId;
+    let employerId = userRole === 'employer' ? getEffectiveEmployerId(req.user) : loggedInUserId;
 
     // For hr-admin and superadmin, employerId must be provided in body
     if (['hr-admin', 'superadmin'].includes(userRole)) {
@@ -565,6 +567,8 @@ jobsController.createJobPost = async (req, res, next) => {
       }
     }
 
+    const isPostedByAdmin = ['hr-admin', 'superadmin'].includes(userRole);
+
     // Create new job post
     const newJobPost = new JobPost({
       jobId: await generateUniqueJobId(),
@@ -600,7 +604,9 @@ jobsController.createJobPost = async (req, res, next) => {
         remaining: Number(positions.total),
       },
       remoteWork: remoteWork || 'On-site', // Default to On-site
-      status: 'Published', // Default to Published
+      status: isPostedByAdmin ? 'Draft' : 'Published',
+      jobApprovalStatus: isPostedByAdmin ? 'pending' : 'not_required',
+      jobApprovalRequestedAt: isPostedByAdmin ? new Date() : null,
     });
 
     await newJobPost.save();
@@ -775,8 +781,8 @@ jobsController.createJobPost = async (req, res, next) => {
         if (selectedEmployer?._id) {
           const employerNotificationPayload = {
             ...notificationPresets.emailUpdate(
-              'New Job Posted by Coimbatore Jobs',
-              `Coimbatore Jobs administration posted "${newJobPost.title}" on behalf of ${companyProfileDoc.companyName}.`
+              'Job Approval Required',
+              `Coimbatore Jobs administration prepared "${newJobPost.title}" for ${companyProfileDoc.companyName}. Please accept or ignore it in Manage Jobs.`
             ),
             jobPost: newJobPost._id,
             actionUrl: '/employers-dashboard/manage-jobs',
@@ -787,7 +793,7 @@ jobsController.createJobPost = async (req, res, next) => {
             body: employerNotificationPayload.description,
             link: `${process.env.FRONTEND_URL}/employers-dashboard/manage-jobs`,
             data: {
-              type: 'job_posted_by_admin',
+              type: 'job_approval_required',
               jobPostId: newJobPost._id,
               actionUrl: employerNotificationPayload.actionUrl,
             },
@@ -802,7 +808,9 @@ jobsController.createJobPost = async (req, res, next) => {
 
     return res.status(201).json({
       success: true,
-      message: 'Job post created successfully',
+      message: isPostedByAdmin
+        ? 'Job post created and sent to employer for approval'
+        : 'Job post created successfully',
       jobPost: newJobPost,
     });
   } catch (error) {
@@ -904,8 +912,8 @@ jobsController.getJobPosts = async (req, res, next) => {
       .populate('industry', 'name slug')
       .populate('role', 'name slug defaultCollarCategory')
       .populate('skills', 'name')
-      .select('employer companyProfile title location applicantCount status closedAt closedBy closedByRole candidateSelectionSource candidateSelectionSourceUpdatedAt candidateSelectionSourceUpdatedBy createdAt applicationDeadline postedBy slug salary offeredSalary')
-      .select('jobId employer companyProfile title location applicantCount status closedAt closedBy closedByRole candidateSelectionSource candidateSelectionSourceUpdatedAt candidateSelectionSourceUpdatedBy createdAt applicationDeadline postedBy')
+      .select('employer companyProfile title location applicantCount status jobApprovalStatus jobApprovalRequestedAt jobApprovalRespondedAt jobApprovalRespondedBy closedAt closedBy closedByRole candidateSelectionSource candidateSelectionSourceUpdatedAt candidateSelectionSourceUpdatedBy createdAt applicationDeadline postedBy slug salary offeredSalary')
+      .select('jobId employer companyProfile title location applicantCount status jobApprovalStatus jobApprovalRequestedAt jobApprovalRespondedAt jobApprovalRespondedBy closedAt closedBy closedByRole candidateSelectionSource candidateSelectionSourceUpdatedAt candidateSelectionSourceUpdatedBy createdAt applicationDeadline postedBy')
       .sort({ createdAt: -1 });  // Most recent first
     await ensureJobIds(jobPosts);
 
@@ -946,6 +954,28 @@ jobsController.getJobPosts = async (req, res, next) => {
       downloadUsageAgg.map((item) => [String(item._id), Number(item.downloadsUsed || 0)])
     );
 
+    const applicationReleaseAgg = filteredJobIds.length
+      ? await Application.aggregate([
+          { $match: { jobPost: { $in: filteredJobIds } } },
+          {
+            $group: {
+              _id: '$jobPost',
+              totalApplications: { $sum: 1 },
+              releasedApplications: {
+                $sum: { $cond: [{ $eq: ['$releasedToEmployer', true] }, 1, 0] },
+              },
+              pendingReleaseApplications: {
+                $sum: { $cond: [{ $eq: ['$releasedToEmployer', true] }, 0, 1] },
+              },
+            },
+          },
+        ])
+      : [];
+
+    const applicationReleaseMap = new Map(
+      applicationReleaseAgg.map((item) => [String(item._id), item])
+    );
+
     let employerResumeUsage = null;
     let employerResumeFeature = {
       enabled: true,
@@ -964,9 +994,24 @@ jobsController.getJobPosts = async (req, res, next) => {
       const downloadsUsed = employerResumeUsage?.total ?? jobDownloadsUsed;
       const limit = employerResumeFeature.limit;
       const jobWithCurrentCollar = applyCurrentRoleCollarCategory(job);
+      const releaseStats = applicationReleaseMap.get(String(job._id)) || {};
+      const totalApplications = Number(releaseStats.totalApplications || 0);
+      const releasedApplications = Number(releaseStats.releasedApplications || 0);
+      const pendingReleaseApplications = Number(releaseStats.pendingReleaseApplications || 0);
+      const visibleApplicationCount = userRole === 'employer'
+        ? releasedApplications
+        : (Number(jobWithCurrentCollar.applicantCount || 0) || totalApplications);
 
       return {
         ...jobWithCurrentCollar,
+        applicantCount: visibleApplicationCount,
+        totalApplications,
+        releasedApplications,
+        pendingReleaseApplications: userRole === 'employer' ? 0 : pendingReleaseApplications,
+        canEmployerApproveJob:
+          userRole === 'employer' &&
+          jobWithCurrentCollar.jobApprovalStatus === 'pending' &&
+          String(jobWithCurrentCollar.employer || '') === String(userId),
         resumeDownloadUsage: {
           used: downloadsUsed,
           limit,
@@ -1434,6 +1479,73 @@ jobsController.updateJobPost = async (req, res, next) => {
     return res.status(200).json({
       success: true,
       message: 'Job post updated successfully',
+      jobPost: updatedJobPost,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+jobsController.respondToAdminPostedJob = async (req, res, next) => {
+  try {
+    const { id: userId, role: userRole } = req.user;
+    const { id: jobPostId } = req.params;
+    const { action } = req.body;
+
+    if (userRole !== 'employer') {
+      throw new ForbiddenError('Only the employer can respond to this job approval request');
+    }
+
+    if (!['accept', 'ignore'].includes(action)) {
+      throw new BadRequestError('Invalid approval action');
+    }
+
+    const jobPost = await JobPost.findById(jobPostId);
+    if (!jobPost) {
+      throw new NotFoundError('Job post not found');
+    }
+
+    if (String(jobPost.employer) !== String(userId)) {
+      throw new ForbiddenError('You do not have permission to approve this job post');
+    }
+
+    if (jobPost.jobApprovalStatus !== 'pending') {
+      throw new BadRequestError('This job post approval request has already been handled');
+    }
+
+    const updateData = {
+      jobApprovalStatus: action === 'accept' ? 'accepted' : 'ignored',
+      jobApprovalRespondedAt: new Date(),
+      jobApprovalRespondedBy: userId,
+    };
+
+    if (action === 'accept') {
+      updateData.status = 'Published';
+      updateData.closedAt = null;
+      updateData.closedBy = null;
+      updateData.closedByRole = null;
+    } else {
+      updateData.status = 'Draft';
+    }
+
+    const updatedJobPost = await JobPost.findByIdAndUpdate(
+      jobPostId,
+      { $set: updateData },
+      { new: true, runValidators: true }
+    )
+      .populate('companyProfile', 'companyName logo email publicPhone phone')
+      .populate('functionalAreas', 'name slug')
+      .populate('industry', 'name slug')
+      .populate('role', 'name slug defaultCollarCategory')
+      .populate('skills', 'name');
+
+    await ensureJobId(updatedJobPost);
+
+    return res.status(200).json({
+      success: true,
+      message: action === 'accept'
+        ? 'Job post approved and published successfully'
+        : 'Job post ignored successfully',
       jobPost: updatedJobPost,
     });
   } catch (error) {

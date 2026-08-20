@@ -257,6 +257,25 @@ const jobPostSchema = new mongoose.Schema({
     enum: ['Draft', 'Published', 'Closed'],
     default: 'Published',
   },
+  jobApprovalStatus: {
+    type: String,
+    enum: ['not_required', 'pending', 'accepted', 'ignored'],
+    default: 'not_required',
+    index: true,
+  },
+  jobApprovalRequestedAt: {
+    type: Date,
+    default: null,
+  },
+  jobApprovalRespondedAt: {
+    type: Date,
+    default: null,
+  },
+  jobApprovalRespondedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null,
+  },
   candidateSelectionSource: {
     type: String,
     enum: ['unknown', 'coimbatorejobs', 'external', 'not_selected'],

@@ -900,7 +900,7 @@ const buildEmployerPlanMatch = ({ search, status, planType, planId }) => {
 };
 
 const getAssignedEmployerIdsForSuperadmin = async () => {
-  const hrAdmins = await User.find({ role: 'hr-admin', isActive: true })
+  const hrAdmins = await User.find({ role: { $in: ['hr-admin', 'sub-admin'] }, isActive: true })
     .select('employerIds')
     .lean();
 
@@ -912,6 +912,11 @@ const getAssignedEmployerIdsForSuperadmin = async () => {
         .map((id) => id.toString()),
     ),
   ];
+};
+
+const getPaymentPlanOwnerId = (user = {}) => {
+  if (user.role === 'hr-admin' && user.createdBy) return user.createdBy;
+  return user.id;
 };
 
 const getResumeDownloadUsage = async (employerId, cycle) => {
@@ -943,7 +948,8 @@ const getResumeDownloadUsage = async (employerId, cycle) => {
 const paymentPlanController = {
   async getPaymentPlans(req, res, next) {
     try {
-      const plans = await PaymentPlan.find({ createdBy: req.user.id })
+      const ownerId = getPaymentPlanOwnerId(req.user);
+      const plans = await PaymentPlan.find({ createdBy: ownerId })
         .sort({ createdAt: -1 })
         .lean();
 
@@ -1421,10 +1427,11 @@ const paymentPlanController = {
   async createPaymentPlan(req, res, next) {
     try {
       const payload = normalizePayload(req.body);
+      const ownerId = getPaymentPlanOwnerId(req.user);
       let message = 'Payment plan created successfully';
 
       if (isFreePlanPayload(payload) && payload.status === 'Active') {
-        const existingActiveFreePlan = await findActiveFreePlan(req.user.id);
+        const existingActiveFreePlan = await findActiveFreePlan(ownerId);
         if (existingActiveFreePlan) {
           payload.status = 'Inactive';
           message =
@@ -1434,7 +1441,7 @@ const paymentPlanController = {
 
       const plan = await PaymentPlan.create({
         ...payload,
-        createdBy: req.user.id,
+        createdBy: ownerId,
       });
 
       return res.status(201).json({
@@ -1450,9 +1457,10 @@ const paymentPlanController = {
   async updatePaymentPlan(req, res, next) {
     try {
       const payload = normalizePayload(req.body);
+      const ownerId = getPaymentPlanOwnerId(req.user);
 
       if (isFreePlanPayload(payload) && payload.status === 'Active') {
-        const existingActiveFreePlan = await findActiveFreePlan(req.user.id, req.params.id);
+        const existingActiveFreePlan = await findActiveFreePlan(ownerId, req.params.id);
         if (existingActiveFreePlan) {
           return res.status(409).json({
             success: false,
@@ -1463,7 +1471,7 @@ const paymentPlanController = {
       }
 
       const plan = await PaymentPlan.findOneAndUpdate(
-        { _id: req.params.id, createdBy: req.user.id },
+        { _id: req.params.id, createdBy: ownerId },
         payload,
         { new: true, runValidators: true },
       );
@@ -1487,6 +1495,7 @@ const paymentPlanController = {
 
   async updatePaymentPlanStatus(req, res, next) {
     try {
+      const ownerId = getPaymentPlanOwnerId(req.user);
       const nextStatus = req.body.status;
       if (!['Active', 'Inactive'].includes(nextStatus)) {
         return res.status(400).json({
@@ -1497,7 +1506,7 @@ const paymentPlanController = {
 
       const currentPlan = await PaymentPlan.findOne({
         _id: req.params.id,
-        createdBy: req.user.id,
+        createdBy: ownerId,
       });
 
       if (!currentPlan) {
@@ -1508,7 +1517,7 @@ const paymentPlanController = {
       }
 
       if (nextStatus === 'Active' && isFreePlanPayload(currentPlan)) {
-        const existingActiveFreePlan = await findActiveFreePlan(req.user.id, currentPlan._id);
+        const existingActiveFreePlan = await findActiveFreePlan(ownerId, currentPlan._id);
         if (existingActiveFreePlan) {
           return res.status(409).json({
             success: false,
@@ -1540,9 +1549,10 @@ const paymentPlanController = {
 
   async deletePaymentPlan(req, res, next) {
     try {
+      const ownerId = getPaymentPlanOwnerId(req.user);
       const plan = await PaymentPlan.findOneAndDelete({
         _id: req.params.id,
-        createdBy: req.user.id,
+        createdBy: ownerId,
       });
 
       if (!plan) {

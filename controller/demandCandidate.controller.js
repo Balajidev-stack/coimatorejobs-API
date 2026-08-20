@@ -5,6 +5,7 @@ import { BadRequestError, ForbiddenError, NotFoundError } from '../utils/errors.
 import { sendDemandCandidateStatusEmail } from '../utils/mailer.js';
 import { createNotification, notificationPresets } from '../utils/notificationHelper.js';
 import { sendPushToUsers } from '../utils/fcm.js';
+import { getEffectiveEmployerId } from '../utils/roleHelper.js';
 
 const demandCandidateController = {};
 
@@ -67,7 +68,7 @@ const getDemandAdminUsers = async () =>
 
 demandCandidateController.createDemandCandidate = async (req, res, next) => {
   try {
-    const employerId = req.user.id;
+    const employerId = getEffectiveEmployerId(req.user);
     const {
       roleTitle,
       jobPostTitle,
@@ -185,7 +186,7 @@ demandCandidateController.getCompanyDemandCandidates = async (req, res, next) =>
 
 demandCandidateController.getMyDemandCandidates = async (req, res, next) => {
   try {
-    const employerId = req.user.id;
+    const employerId = getEffectiveEmployerId(req.user);
 
     const demands = await DemandCandidate.find({ employer: employerId })
       .populate('companyProfile', 'companyName email')
