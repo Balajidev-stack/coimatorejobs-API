@@ -1,13 +1,16 @@
 // utils/roleHelper.js
 
 // Roles that can act like "employer" (post jobs, manage applicants)
-export const EMPLOYER_LIKE_ROLES = ['employer', 'hr-admin', 'superadmin'];
+export const EMPLOYER_LIKE_ROLES = ['employer', 'hr-admin', 'sub-admin', 'superadmin'];
 
 // Roles that can manage users/system
 export const PLATFORM_ADMIN_ROLES = ['superadmin'];
 
 export const isEmployerLike = (role) => EMPLOYER_LIKE_ROLES.includes(role);
 export const isPlatformAdmin = (role) => PLATFORM_ADMIN_ROLES.includes(role);
+
+export const getEffectiveEmployerId = (user) =>
+  user?.employerOwnerId || user?.parentEmployer || user?.id || user?._id;
 
 
 /**
@@ -30,13 +33,13 @@ export const canManageJob = (jobPost, user) => {
 
   if (user.role === 'superadmin') return true;
 
-  if (user.role === 'employer' && jobPost.employer?.toString() === user.id.toString()) {
+  if (user.role === 'employer' && jobPost.employer?.toString() === getEffectiveEmployerId(user)?.toString()) {
     return true;
   }
   // console.log("tetttt", user.id);
 
    // HR-Admin → manages jobs for assigned employer
-  if (user.role === 'hr-admin') {
+  if (['hr-admin', 'sub-admin'].includes(user.role)) {
     return true;
   }
 
@@ -57,13 +60,13 @@ export const buildJobQueryForUser = (user) => {
   if (!user) return { _id: null };
 
   // SUPERADMIN → all jobs
-  if (user.role === 'superadmin' || user.role === 'hr-admin') {
+  if (user.role === 'superadmin' || ['hr-admin', 'sub-admin'].includes(user.role)) {
     return {}; // All jobs
   }
 
   // EMPLOYER → own jobs
   if (user.role === 'employer') {
-    return { employer: user.id };
+    return { employer: getEffectiveEmployerId(user) };
   }
 
   // HR-ADMIN → jobs of assigned employers
@@ -101,7 +104,7 @@ export const buildDashboardFilter = (user, collection) => {
   if (user.role === 'superadmin') return {};
   
   // HR-Admin filters by assigned employers
-  if (user.role === 'hr-admin' && user.employerIds && user.employerIds.length > 0) {
+  if (['hr-admin', 'sub-admin'].includes(user.role) && user.employerIds && user.employerIds.length > 0) {
     switch (collection) {
       case 'users':
         return { _id: { $in: user.employerIds }, role: 'employer' };
@@ -119,18 +122,19 @@ export const buildDashboardFilter = (user, collection) => {
   
   // Employer filters by their own data
   if (user.role === 'employer') {
+    const employerId = getEffectiveEmployerId(user);
     switch (collection) {
       case 'users':
-        return { _id: user.id };
+        return { _id: employerId };
       case 'jobposts':
-        return { employer: user.id };
+        return { employer: employerId };
       case 'companyprofiles':
-        return { employer: user.id };
+        return { employer: employerId };
       case 'applications':
         // Will be filtered via job posts
         return {};
       default:
-        return { employer: user.id };
+        return { employer: employerId };
     }
   }
   
@@ -143,7 +147,7 @@ export const buildDashboardFilter = (user, collection) => {
  * @returns {boolean} - True if can view platform stats
  */
 export const canViewPlatformStats = (role) => {
-  return ['hr-admin', 'superadmin'].includes(role);
+  return ['hr-admin', 'sub-admin', 'superadmin'].includes(role);
 };
 
 /**
@@ -157,12 +161,12 @@ export const canViewEmployerStats = (user, employerId) => {
   
   if (user.role === 'superadmin') return true;
   
-  if (user.role === 'hr-admin') {
+  if (['hr-admin', 'sub-admin'].includes(user.role)) {
     return user.employerIds?.some(id => id.toString() === employerId.toString());
   }
   
   if (user.role === 'employer') {
-    return user.id.toString() === employerId.toString();
+    return getEffectiveEmployerId(user)?.toString() === employerId.toString();
   }
   
   return false;

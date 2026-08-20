@@ -15,6 +15,7 @@ import { SUPERADMIN_EMAIL, THROTTLING_RETRY_DELAY_BASE } from "../config/env.js"
 import Industry from '../models/industry.model.js';
 import FunctionalArea from '../models/functionalArea.model.js';
 import { normalizeEmail } from "../utils/emailValidation.js";
+import { getEffectiveEmployerId } from "../utils/roleHelper.js";
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
@@ -24,6 +25,10 @@ const DEFAULT_COMPANY_EMAIL = "hello@coimbatorejobs.in";
 const INTERNAL_EMAIL_SUFFIX = "@internal.coimbatorejobs.in";
 const COMPANY_ID_PREFIX = "CMP";
 const normalizePhoneValue = (value = "") => String(value || "").trim();
+const normalizeOptionalPhoneValue = (value = "") => {
+  const normalized = normalizePhoneValue(value);
+  return normalized || undefined;
+};
 
 const buildCompanyId = () =>
   `${COMPANY_ID_PREFIX}-${crypto.randomInt(10000000, 100000000)}`;
@@ -97,9 +102,9 @@ const attachDemandCandidateCounts = async (profiles = []) => {
 };
 
 const normalizeCompanyProfilePhones = (profileData = {}) => {
-  const landlineNumber = normalizePhoneValue(profileData.landlineNumber);
+  const landlineNumber = normalizeOptionalPhoneValue(profileData.landlineNumber);
   const phoneNumber = normalizePhoneValue(profileData.phoneNumber || profileData.publicPhone || profileData.phone);
-  const hrPhoneNumber = normalizePhoneValue(profileData.hrPhoneNumber || profileData.internalPhone);
+  const hrPhoneNumber = normalizeOptionalPhoneValue(profileData.hrPhoneNumber || profileData.internalPhone);
 
   return {
     landlineNumber,
@@ -367,7 +372,7 @@ employerController.createCompanyProfile = async (req, res, next) => {
      */
 
      // Resolve employerId correctly
-    let employerId = loggedInUserId;
+    let employerId = role === 'employer' ? getEffectiveEmployerId(req.user) : loggedInUserId;
     
     if (['hr-admin', 'superadmin'].includes(role)) {
       if (!profileData.employerId.toString()) {
@@ -439,11 +444,11 @@ employerController.createCompanyProfile = async (req, res, next) => {
     // const requiredFields = ['companyName', 'email', 'phone', 'establishedSince', 
     //                        'teamSize', 'categories', 'description', 'industry', 'companyType'];
 
-    const requiredFields = ['companyName', 'landlineNumber', 'phoneNumber', 'hrPhoneNumber', 'establishedSince', 
+    const requiredFields = ['companyName', 'phoneNumber', 'establishedSince',
     'teamSize', 'description'];
     
     const missingFields = requiredFields.filter(field => {
-      if (['landlineNumber', 'phoneNumber', 'hrPhoneNumber'].includes(field)) return !phoneValues[field];
+      if (field === 'phoneNumber') return !phoneValues[field];
       return !profileData[field];
     });
     if (missingFields.length > 0) {
@@ -677,7 +682,8 @@ employerController.updateCompanyProfile = async (req, res, next) => {
       updateData = req.body; // Fallback, though unlikely with FormData
     }
 
-    const loggedInUserId = typeof user.id === 'object' && user.id.toHexString ? user.id.toHexString() : (user.id || user._id)?.toString();
+    const effectiveEmployerId = getEffectiveEmployerId(user);
+    const loggedInUserId = typeof effectiveEmployerId === 'object' && effectiveEmployerId.toHexString ? effectiveEmployerId.toHexString() : effectiveEmployerId?.toString();
 
     // Find the profile by ID
     const profile = await CompanyProfile.findById(profileId);
@@ -735,8 +741,8 @@ employerController.updateCompanyProfile = async (req, res, next) => {
         phoneNumber: Object.prototype.hasOwnProperty.call(updateData, 'phoneNumber') ? updateData.phoneNumber : (profile.phoneNumber || profile.publicPhone || profile.phone),
         hrPhoneNumber: Object.prototype.hasOwnProperty.call(updateData, 'hrPhoneNumber') ? updateData.hrPhoneNumber : (profile.hrPhoneNumber || profile.internalPhone),
       });
-      if (!phoneValues.landlineNumber || !phoneValues.phoneNumber || !phoneValues.hrPhoneNumber) {
-        throw new BadRequestError('Landline Number, Phone Number and HR Phone Number are required');
+      if (!phoneValues.phoneNumber) {
+        throw new BadRequestError('Phone Number is required');
       }
       updateData.phone = phoneValues.phone;
       updateData.publicPhone = phoneValues.publicPhone;
@@ -991,7 +997,7 @@ employerController.getCompanyProfile = async (req, res, next) => {
  */
 employerController.getCompanyProfilesForEmployer = async (req, res, next) => {
   try {
-    const employerId = req.user.id || req.user._id; // safe fallback
+    const employerId = getEffectiveEmployerId(req.user); // safe fallback
 
     // Fetch only company profiles that belong to this employer and POPULATE references
     const profiles = await CompanyProfile
@@ -1045,7 +1051,7 @@ employerController.deleteCompanyProfile = async (req, res, next) => {
 
     // Check permissions: allow if user is superadmin or the original creator (employer)
     const isAdmin = ['superadmin', 'hr-admin'].includes(req.user.role);
-    const isOwner = profile.employer._id.toString() === user.id.toString();
+    const isOwner = profile.employer._id.toString() === getEffectiveEmployerId(user)?.toString();
 
     if (!isAdmin && !isOwner) {
       throw new ForbiddenError('You do not have permission to delete this profile');
@@ -1229,7 +1235,7 @@ employerController.approveCompanyProfile = async (req, res, next) => {
  */
 employerController.saveCandidate = async (req, res, next) => {
   try {
-    const employerId = req.user.id;
+    const employerId = getEffectiveEmployerId(req.user);
     const candidateId = req.params.candidateId;
     const candidateProfileId = req.params.candidateId;
 
@@ -1272,7 +1278,7 @@ employerController.saveCandidate = async (req, res, next) => {
  */
 employerController.unsaveCandidate = async (req, res, next) => {
   try {
-    const employerId = req.user.id;
+    const employerId = getEffectiveEmployerId(req.user);
     const savedId = req.params.savedId;
 
     // console.log("testtttt", savedId);
@@ -1303,7 +1309,7 @@ employerController.unsaveCandidate = async (req, res, next) => {
  */
 employerController.getSavedCandidates = async (req, res, next) => {
   try {
-    const employerId = req.user.id;
+    const employerId = getEffectiveEmployerId(req.user);
     const { folder, search, page = 1, limit = 10 } = req.query;
 
     let query = { employer: employerId };

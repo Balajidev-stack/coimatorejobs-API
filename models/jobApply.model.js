@@ -39,6 +39,20 @@ const jobApplicationSchema = new mongoose.Schema({
     type: Boolean,
     default: false, // Indicates if the employer has shortlisted this application
   },
+  releasedToEmployer: {
+    type: Boolean,
+    default: false,
+    index: true,
+  },
+  releasedAt: {
+    type: Date,
+    default: null,
+  },
+  releasedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null,
+  },
   candidateJoinConfirmation: {
     type: String,
     enum: ['pending', 'confirmed', 'declined', 'not_required'],

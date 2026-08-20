@@ -49,9 +49,61 @@ const userSchema = new mongoose.Schema({
     },
     role: { 
         type: String, 
-        enum: ['candidate', 'employer', 'hr-admin', 'superadmin'], 
+        enum: ['candidate', 'employer', 'hr-admin', 'sub-admin', 'superadmin'], 
         default: 'candidate',
         required: true
+    },
+    hrAdminRoleName: {
+        type: String,
+        trim: true,
+        default: ''
+    },
+    hrAdminRoleType: {
+        type: String,
+        enum: ['default', 'custom', ''],
+        default: ''
+    },
+    hrAdminRoleRef: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'HrAdminRole',
+        default: null
+    },
+    hrAdminRoleRemoved: {
+        type: Boolean,
+        default: false
+    },
+    hrAdminAccessTabs: [{
+        type: String,
+        trim: true
+    }],
+    employerRoleName: {
+        type: String,
+        trim: true,
+        default: ''
+    },
+    employerRoleType: {
+        type: String,
+        enum: ['owner', 'default', 'custom', ''],
+        default: ''
+    },
+    employerRoleRef: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'EmployerAccessRole',
+        default: null
+    },
+    employerRoleRemoved: {
+        type: Boolean,
+        default: false
+    },
+    employerAccessTabs: [{
+        type: String,
+        trim: true
+    }],
+    parentEmployer: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        default: null,
+        index: true
     },
     // Account status. Candidate/company profile approval is tracked separately.
     status: {
@@ -97,7 +149,7 @@ const userSchema = new mongoose.Schema({
     },
     assignmentSource: {
         type: String,
-        enum: ['self-signup', 'hr-admin', 'superadmin', 'superadmin-assigned', 'system', 'payment'],
+        enum: ['self-signup', 'hr-admin', 'superadmin', 'superadmin-assigned', 'system', 'payment', 'employer'],
         default: 'self-signup'
     },
     isActive: { type: Boolean, default: true },

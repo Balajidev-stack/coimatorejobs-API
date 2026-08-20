@@ -3,6 +3,8 @@ import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import User from "../models/user.model.js";
+import HrAdminRole from "../models/hrAdminRole.model.js";
+import EmployerAccessRole from "../models/employerAccessRole.model.js";
 import PaymentPlan from "../models/paymentPlan.model.js";
 import JobPost from "../models/jobs.model.js";
 import JobApplication from "../models/jobApply.model.js";
@@ -33,6 +35,154 @@ const DEFAULT_PUBLIC_EMPLOYER_EMAIL = 'hello@coimbatorejobs.in';
 const INTERNAL_EMPLOYER_EMAIL_REGEX = /^employer_.*_@internal\.coimbatorejobs\.in$/i;
 const EMPLOYER_ID_PREFIX = 'EMP';
 const OLD_SEQUENTIAL_EMPLOYER_ID_REGEX = /^EMP-0+\d+$/;
+const DEFAULT_HR_ADMIN_ROLES = [
+  'Administrator',
+  'HR Manager',
+  'HR Executive',
+  'Intern',
+  'User(Other)',
+  'Finance Manager'
+];
+const DEFAULT_EMPLOYER_ACCESS_ROLES = DEFAULT_HR_ADMIN_ROLES;
+const SUB_ADMIN_ROLES = ['hr-admin', 'sub-admin'];
+const isSubAdminRole = (role = '') => SUB_ADMIN_ROLES.includes(role);
+const HR_ADMIN_ACCESS_TABS = [
+  { label: 'Dashboard', path: '/hr-admin-dashboard/dashboard' },
+  { label: 'Create & View Candidates', path: '/hr-admin-dashboard/create-candidates' },
+  { label: 'Create & View Employers', path: '/hr-admin-dashboard/create-employers' },
+  { label: 'Profile Status (Actions)', path: '/hr-admin-dashboard/profile-status' },
+  { label: 'Candidate Profile', path: '/hr-admin-dashboard/candidate-profile' },
+  { label: 'Company Profile', path: '/hr-admin-dashboard/company-profile' },
+  { label: 'Post a New Job', path: '/hr-admin-dashboard/post-jobs' },
+  { label: 'Manage Jobs', path: '/hr-admin-dashboard/manage-jobs' },
+  { label: 'All Applicants', path: '/hr-admin-dashboard/all-applicants' },
+  { label: 'Shortlisted Resumes', path: '/hr-admin-dashboard/shortlisted-resumes' },
+  { label: 'Employer Plans', path: '/hr-admin-dashboard/employer-plans' },
+  { label: 'Pricing', path: '/hr-admin-dashboard/payment-plans' },
+  { label: 'Settings', path: '/hr-admin-dashboard/settings' },
+];
+const DEFAULT_HR_ADMIN_ACCESS_TABS = HR_ADMIN_ACCESS_TABS.map((tab) => tab.path);
+const EMPLOYER_ACCESS_TABS = [
+  { label: 'Dashboard', path: '/employers-dashboard/dashboard' },
+  { label: 'Company Profile', path: '/employers-dashboard/company-profile' },
+  { label: 'Post a New Job', path: '/employers-dashboard/post-jobs' },
+  { label: 'Manage Jobs', path: '/employers-dashboard/manage-jobs' },
+  { label: 'All Applicants', path: '/employers-dashboard/all-applicants' },
+  { label: 'Shortlisted Resumes', path: '/employers-dashboard/shortlisted-resumes' },
+  { label: 'Plan History', path: '/employers-dashboard/plan-history' },
+  { label: 'Resume Alerts', path: '/employers-dashboard/resume-alerts' },
+  { label: 'Settings', path: '/employers-dashboard/settings' },
+];
+const DEFAULT_EMPLOYER_ACCESS_TABS = EMPLOYER_ACCESS_TABS.map((tab) => tab.path);
+const EMPLOYER_ROLE_ID_PREFIX = 'ERL';
+const EMPLOYER_ACCESS_TAB_ALIASES = {
+  '/employers-dashboard/recent-activities': '/employers-dashboard/settings',
+  '/employers-dashboard/change-password': '/employers-dashboard/settings',
+};
+const HR_ADMIN_ACCESS_TAB_ALIASES = {
+  '/super-admin-dashboard/employer-plans': '/hr-admin-dashboard/employer-plans',
+  '/super-admin-dashboard/payment-plans': '/hr-admin-dashboard/payment-plans',
+};
+const normalizeHrAdminAccessTabs = (tabs = []) => {
+  const allowedTabs = new Set(DEFAULT_HR_ADMIN_ACCESS_TABS);
+  const normalizedTabs = Array.isArray(tabs)
+    ? tabs
+        .map((tab) => HR_ADMIN_ACCESS_TAB_ALIASES[String(tab || '').trim()] || String(tab || '').trim())
+        .filter(Boolean)
+    : [];
+
+  return [...new Set(normalizedTabs.filter((tab) => allowedTabs.has(tab)))];
+};
+
+const normalizeHrAdminRoleName = (value = '') =>
+  String(value || '').trim().replace(/\s+/g, ' ');
+
+const normalizeEmployerAccessTabs = (tabs = []) => {
+  const allowedTabs = new Set(DEFAULT_EMPLOYER_ACCESS_TABS);
+  const normalizedTabs = Array.isArray(tabs)
+    ? tabs
+        .map((tab) => EMPLOYER_ACCESS_TAB_ALIASES[String(tab || '').trim()] || String(tab || '').trim())
+        .filter(Boolean)
+    : [];
+
+  return [...new Set(normalizedTabs.filter((tab) => allowedTabs.has(tab)))];
+};
+
+const normalizeEmployerRoleName = (value = '') =>
+  String(value || '').trim().replace(/\s+/g, ' ');
+
+const getDefaultEmployerAccessRoleName = (value = '') => {
+  const normalizedRoleName = normalizeEmployerRoleName(value);
+  return DEFAULT_EMPLOYER_ACCESS_ROLES.find(
+    (role) => role.toLowerCase() === normalizedRoleName.toLowerCase()
+  ) || '';
+};
+
+const buildEmployerRoleId = () =>
+  `${EMPLOYER_ROLE_ID_PREFIX}-${crypto.randomInt(10000000, 100000000)}`;
+
+const generateUniqueEmployerRoleId = async () => {
+  let candidate = buildEmployerRoleId();
+  while (await EmployerAccessRole.exists({ roleId: candidate })) {
+    candidate = buildEmployerRoleId();
+  }
+  return candidate;
+};
+
+const getEmployerOwnerIdFromUser = (user) =>
+  user?.employerOwnerId || user?.parentEmployer || user?.id || user?._id;
+
+const resolveHrAdminRole = async ({ roleName, roleRef, session = null }) => {
+  const normalizedRoleName = normalizeHrAdminRoleName(roleName);
+
+  if (!normalizedRoleName) {
+    return {
+      error: 'HR admin role is required',
+    };
+  }
+
+  const builtInRole = DEFAULT_HR_ADMIN_ROLES.find(
+    (item) => item.toLowerCase() === normalizedRoleName.toLowerCase()
+  );
+
+  if (builtInRole) {
+    return {
+      hrAdminRoleName: builtInRole,
+      hrAdminRoleType: 'default',
+      hrAdminRoleRef: null,
+      hrAdminRoleRemoved: false,
+      hrAdminAccessTabs: DEFAULT_HR_ADMIN_ACCESS_TABS,
+      isActive: true,
+    };
+  }
+
+  const query = roleRef
+    ? HrAdminRole.findOne({ _id: roleRef, isActive: true })
+    : HrAdminRole.findOne({
+        normalizedName: normalizedRoleName.toLowerCase(),
+        isActive: true,
+      });
+
+  if (session) query.session(session);
+  const customRole = await query;
+
+  if (!customRole) {
+    return {
+      error: 'Please select a valid HR admin role or create it as a custom role first',
+    };
+  }
+
+  return {
+    hrAdminRoleName: customRole.name,
+    hrAdminRoleType: 'custom',
+    hrAdminRoleRef: customRole._id,
+    hrAdminRoleRemoved: false,
+    hrAdminAccessTabs: normalizeHrAdminAccessTabs(customRole.accessTabs).length
+      ? normalizeHrAdminAccessTabs(customRole.accessTabs)
+      : DEFAULT_HR_ADMIN_ACCESS_TABS,
+    isActive: true,
+  };
+};
 
 const buildEmployerId = () =>
   `${EMPLOYER_ID_PREFIX}-${crypto.randomInt(10000000, 100000000)}`;
@@ -165,7 +315,7 @@ const getPublicEmployerEmail = (user) => {
 const getRegistrationAlertAdmins = async () => {
   const configuredEmail = String(SUPERADMIN_EMAIL || '').trim().toLowerCase();
   const admins = await User.find({
-    role: { $in: ['hr-admin', 'superadmin'] },
+    role: { $in: ['hr-admin', 'sub-admin', 'superadmin'] },
     isActive: true,
     $or: [{ isDeleted: false }, { isDeleted: { $exists: false } }],
   }).select('_id name email role status');
@@ -267,7 +417,7 @@ authentication.signup = async (req, res, next) => {
         const { name, email, password, role } = req.body;
         const normalizedEmail = normalizeEmail(email);
         // Only allow candidate, employer, hr-admin roles on signup
-        const safeRole = ['candidate', 'employer', 'hr-admin'].includes(role) ? role : 'candidate';
+        const safeRole = ['candidate', 'employer', 'hr-admin', 'sub-admin'].includes(role) ? role : 'candidate';
 
         // Validate required fields
         if (!name || !normalizedEmail || !password) {
@@ -385,7 +535,7 @@ authentication.createAdminUser = async (req, res, next) => {
   session.startTransaction();
   
   try {
-    const { name, email, password, role, assignedHrAdminId } = req.body;
+    const { name, email, password, role, assignedHrAdminId, hrAdminRoleName, hrAdminRoleRef, hrAdminAccessTabs } = req.body;
     const creator = req.user; // hr-admin or superadmin
 
      // Only hr-admin or superadmin can access this API
@@ -394,7 +544,7 @@ authentication.createAdminUser = async (req, res, next) => {
     }
 
     // Basic validation
-    if (!name || !password) {
+    if (!String(name || '').trim() || !String(password || '').trim()) {
       return res.status(400).json({
         message: 'Name and password are required'
       });
@@ -410,13 +560,41 @@ authentication.createAdminUser = async (req, res, next) => {
     // Role permission matrix
     const rolePermissions = {
       'hr-admin': ['employer', 'candidate'],
-      'superadmin': ['employer', 'candidate', 'hr-admin']
+      'sub-admin': ['employer', 'candidate'],
+      'superadmin': ['employer', 'candidate', 'hr-admin', 'sub-admin']
     };
 
     if (!rolePermissions[creator.role]?.includes(role)) {
       return res.status(403).json({
         message: `You are not allowed to create ${role} accounts`
       });
+    }
+
+    let hrAdminRolePayload = {};
+    if (isSubAdminRole(role)) {
+      const selectedHrAdminAccessTabs = normalizeHrAdminAccessTabs(hrAdminAccessTabs);
+      const resolvedHrAdminRole = await resolveHrAdminRole({
+        roleName: hrAdminRoleName,
+        roleRef: hrAdminRoleRef,
+        session,
+      });
+
+      if (resolvedHrAdminRole.error) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({ message: resolvedHrAdminRole.error });
+      }
+
+      if (selectedHrAdminAccessTabs.length === 0) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({ message: 'Select at least one tab access for this HR admin' });
+      }
+
+      hrAdminRolePayload = {
+        ...resolvedHrAdminRole,
+        hrAdminAccessTabs: selectedHrAdminAccessTabs,
+      };
     }
 
     // Email is optional for admin-created users. If not provided, keep it empty
@@ -481,6 +659,7 @@ authentication.createAdminUser = async (req, res, next) => {
       assignmentSource: resolvedAssignmentSource,
       isSystemGeneratedEmail,
       loginId,
+      ...hrAdminRolePayload,
       ...(employerId ? { employerId } : {}),
       ...freePlanAssignment
     };
@@ -491,7 +670,7 @@ authentication.createAdminUser = async (req, res, next) => {
     const [user] = await User.create([createPayload], { session });
 
     // AUTO ASSIGN EMPLOYER TO HR-ADMIN
-   if (creator.role === 'hr-admin') {
+   if (isSubAdminRole(creator.role)) {
       const updateField =
         role === 'employer'
           ? { employerIds: user._id }
@@ -505,7 +684,7 @@ authentication.createAdminUser = async (req, res, next) => {
     }
 
     // If Superadmin creates HR Admin → assign to hrAdminIds
-    if (creator.role === 'superadmin' && role === 'hr-admin') {
+    if (creator.role === 'superadmin' && isSubAdminRole(role)) {
       await User.updateOne(
         { _id: creator.id },
         { $addToSet: { hrAdminIds: user._id } },
@@ -520,7 +699,7 @@ authentication.createAdminUser = async (req, res, next) => {
       }
 
       const hrAdmin = await User.findById(assignedHrAdminId).session(session);
-      if (!hrAdmin || hrAdmin.role !== 'hr-admin') {
+      if (!hrAdmin || !isSubAdminRole(hrAdmin.role)) {
         return res.status(400).json({ message: 'Invalid HR Admin selected' });
       }
 
@@ -567,6 +746,15 @@ authentication.createAdminUser = async (req, res, next) => {
         _id: user._id,
         name: user.name,
         role: user.role,
+        hrAdminRoleName: user.hrAdminRoleName || '',
+        hrAdminRoleType: user.hrAdminRoleType || '',
+        hrAdminRoleRemoved: user.hrAdminRoleRemoved || false,
+        hrAdminAccessTabs: user.hrAdminAccessTabs || [],
+        parentEmployer: user.parentEmployer || null,
+        employerRoleName: user.employerRoleName || '',
+        employerRoleType: user.employerRoleType || '',
+        employerRoleRemoved: user.employerRoleRemoved || false,
+        employerAccessTabs: user.employerAccessTabs || [],
         email: getPublicEmployerEmail(user),
         loginId: user.loginId,
         employerId: user.employerId,
@@ -589,26 +777,26 @@ authentication.createAdminUser = async (req, res, next) => {
 authentication.updateAdminUser = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { name, email } = req.body;
+    const { name, email, hrAdminRoleName, hrAdminRoleRef, hrAdminAccessTabs } = req.body;
 
     const editor = await User.findById(req.user.id).select('role employerIds candidateIds');
-    if (!editor || !['hr-admin', 'superadmin'].includes(editor.role)) {
+    if (!editor || !['hr-admin', 'sub-admin', 'superadmin'].includes(editor.role)) {
       return res.status(403).json({ message: 'Not allowed to edit accounts' });
     }
 
     const targetUser = await User.findById(id);
-    if (!targetUser || !['employer', 'candidate', 'hr-admin'].includes(targetUser.role)) {
+    if (!targetUser || !['employer', 'candidate', 'hr-admin', 'sub-admin'].includes(targetUser.role)) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    if (editor.role === 'hr-admin' && !['employer', 'candidate'].includes(targetUser.role)) {
+    if (isSubAdminRole(editor.role) && !['employer', 'candidate'].includes(targetUser.role)) {
       return res.status(403).json({
         message: 'HR Admin can edit only employer and candidate accounts'
       });
     }
 
     // Superadmin can edit HR-admin accounts directly.
-    if (editor.role === 'superadmin' && targetUser.role === 'hr-admin') {
+    if (editor.role === 'superadmin' && isSubAdminRole(targetUser.role)) {
       const updatePayload = {};
 
       if (typeof name === 'string' && name.trim()) {
@@ -634,6 +822,33 @@ authentication.updateAdminUser = async (req, res, next) => {
         updatePayload.email = normalizedEmail;
       }
 
+      if (typeof hrAdminRoleName === 'string' || hrAdminRoleRef) {
+        const selectedHrAdminAccessTabs = normalizeHrAdminAccessTabs(hrAdminAccessTabs);
+        const resolvedHrAdminRole = await resolveHrAdminRole({
+          roleName: hrAdminRoleName,
+          roleRef: hrAdminRoleRef,
+        });
+
+        if (resolvedHrAdminRole.error) {
+          return res.status(400).json({ message: resolvedHrAdminRole.error });
+        }
+
+        if (selectedHrAdminAccessTabs.length === 0) {
+          return res.status(400).json({ message: 'Select at least one tab access for this HR admin' });
+        }
+
+        Object.assign(updatePayload, {
+          ...resolvedHrAdminRole,
+          hrAdminAccessTabs: selectedHrAdminAccessTabs,
+        });
+      } else if (Array.isArray(hrAdminAccessTabs)) {
+        const selectedHrAdminAccessTabs = normalizeHrAdminAccessTabs(hrAdminAccessTabs);
+        if (selectedHrAdminAccessTabs.length === 0) {
+          return res.status(400).json({ message: 'Select at least one tab access for this HR admin' });
+        }
+        updatePayload.hrAdminAccessTabs = selectedHrAdminAccessTabs;
+      }
+
       if (Object.keys(updatePayload).length === 0) {
         return res.status(400).json({ message: 'No valid fields provided for update' });
       }
@@ -653,7 +868,7 @@ authentication.updateAdminUser = async (req, res, next) => {
 
     let isAssignedUser = false;
 
-    if (editor.role === 'hr-admin') {
+    if (isSubAdminRole(editor.role)) {
       const assignedEmployer = (editor.employerIds || []).some(
         (empId) => empId.toString() === id.toString()
       );
@@ -664,7 +879,7 @@ authentication.updateAdminUser = async (req, res, next) => {
     } else if (editor.role === 'superadmin') {
       const assignedField = targetUser.role === 'candidate' ? 'candidateIds' : 'employerIds';
       const assignedHrAdmin = await User.findOne({
-        role: 'hr-admin',
+        role: { $in: ['hr-admin', 'sub-admin'] },
         isActive: true,
         [assignedField]: targetUser._id
       }).select('_id');
@@ -729,7 +944,7 @@ authentication.updateAdminUser = async (req, res, next) => {
  */
 authentication.getAssignedUsers = async (req, res, next) => {
   try {
-    const { roles } = req.query;
+    const { roles, includeRoleRemoved } = req.query;
  
     // IMPORTANT: fetch fresh user from DB
     const loggedInUser = await User.findById(req.user.id)
@@ -747,19 +962,37 @@ authentication.getAssignedUsers = async (req, res, next) => {
       // Default behavior
       roleFilter =
         loggedInUser.role === 'superadmin'
-          ? ['employer', 'candidate', 'hr-admin']
+          ? ['employer', 'candidate', 'hr-admin', 'sub-admin']
           : ['employer', 'candidate'];
     }
 
-    const includesHrAdminRole = roleFilter.includes('hr-admin');
+    if (roleFilter.includes('hr-admin') && !roleFilter.includes('sub-admin')) {
+      roleFilter.push('sub-admin');
+    }
+
+    const includesHrAdminRole = roleFilter.some(isSubAdminRole);
     const includesAssignableRole = roleFilter.some((role) => ['employer', 'candidate'].includes(role));
     const shouldApplyAssignedFilter = includesAssignableRole && !includesHrAdminRole;
+    const shouldIncludeRoleRemoved =
+      includesHrAdminRole &&
+      String(includeRoleRemoved || '').trim().toLowerCase() === 'true';
  
     let query = {
       role: { $in: roleFilter },
-      isActive: true,
       $or: [{ isDeleted: false }, { isDeleted: { $exists: false } }]
     };
+
+    if (shouldIncludeRoleRemoved) {
+      query.$and = query.$and || [];
+      query.$and.push({
+        $or: [
+          { isActive: true },
+          { hrAdminRoleRemoved: true },
+        ],
+      });
+    } else {
+      query.isActive = true;
+    }
  
     // console.log("test", query);
    
@@ -772,10 +1005,10 @@ authentication.getAssignedUsers = async (req, res, next) => {
      * HR-ADMIN → ONLY USERS ASSIGNED TO THEM
      */
     if (shouldApplyAssignedFilter) {
-      const hrAdmins = await User.find({ role: 'hr-admin', isActive: true })
+      const hrAdmins = await User.find({ role: { $in: ['hr-admin', 'sub-admin'] }, isActive: true })
         .select('employerIds candidateIds');
       const adminUsers = await User.find({
-        role: { $in: ['hr-admin', 'superadmin'] },
+        role: { $in: ['hr-admin', 'sub-admin', 'superadmin'] },
         isActive: true,
       }).select('_id');
 
@@ -802,6 +1035,8 @@ authentication.getAssignedUsers = async (req, res, next) => {
  
     // SUPERADMIN → sees all
     const users = await User.find(query, { password: 0 })
+      .populate('parentEmployer', 'name employerId')
+      .populate('employerRoleRef', 'roleId name')
       .sort({ createdAt: -1 });
 
     await ensureEmployerIdsForUsers(users);
@@ -883,6 +1118,16 @@ authentication.signin = async (req, res, next) => {
 
         // Check if account active
         if (!user.isActive || user.isDeleted) {
+            if (isSubAdminRole(user.role) && user.hrAdminRoleRemoved) {
+              return res.status(403).json({
+                message: "Your HR admin role was removed. Please contact the super admin."
+              });
+            }
+            if (user.role === 'employer' && user.employerRoleRemoved) {
+              return res.status(403).json({
+                message: "Your employer access role was removed. Please contact your company admin."
+              });
+            }
             return res.status(403).json({ message: "User account is deactivated" });
         }
 
@@ -901,7 +1146,7 @@ authentication.signin = async (req, res, next) => {
 
         if (
           normalizedRequestedRole === 'employer' &&
-          !['employer', 'hr-admin', 'superadmin'].includes(user.role)
+          !['employer', 'hr-admin', 'sub-admin', 'superadmin'].includes(user.role)
         ) {
           return res.status(403).json({
             message: `Account is registered as ${user.role}. Please login via Candidate tab.`
@@ -962,6 +1207,13 @@ authentication.signin = async (req, res, next) => {
               id: user._id,
               name: user.name,
               role: user.role,
+              hrAdminRoleName: user.hrAdminRoleName || '',
+              hrAdminRoleRemoved: user.hrAdminRoleRemoved || false,
+              hrAdminAccessTabs: user.hrAdminAccessTabs || [],
+              parentEmployer: user.parentEmployer || null,
+              employerRoleName: user.employerRoleName || '',
+              employerRoleRemoved: user.employerRoleRemoved || false,
+              employerAccessTabs: user.employerAccessTabs || [],
               status: user.status,
               loginId: user.loginId || null,
               employerId: user.employerId || null,
@@ -984,6 +1236,13 @@ authentication.signin = async (req, res, next) => {
                 id: user._id,
                 name: user.name,
                 role: user.role,
+                hrAdminRoleName: user.hrAdminRoleName || '',
+                hrAdminRoleRemoved: user.hrAdminRoleRemoved || false,
+                hrAdminAccessTabs: user.hrAdminAccessTabs || [],
+                parentEmployer: user.parentEmployer || null,
+                employerRoleName: user.employerRoleName || '',
+                employerRoleRemoved: user.employerRoleRemoved || false,
+                employerAccessTabs: user.employerAccessTabs || [],
                 status: user.status,
                 loginId: user.loginId || null,
                 employerId: user.employerId || null,
@@ -1076,6 +1335,10 @@ authentication.verifySigninOtp = async (req, res, next) => {
         status: user.status,
         loginId: user.loginId || null,
         employerId: user.employerId || null,
+        parentEmployer: user.parentEmployer || null,
+        employerRoleName: user.employerRoleName || '',
+        employerRoleRemoved: user.employerRoleRemoved || false,
+        employerAccessTabs: user.employerAccessTabs || [],
         email: user.isSystemGeneratedEmail ? null : user.email,
         isSystemGeneratedEmail: user.isSystemGeneratedEmail,
         activePaymentPlan: user.activePaymentPlan || null
@@ -1089,6 +1352,577 @@ authentication.verifySigninOtp = async (req, res, next) => {
 
 // Backward compatibility
 authentication.verifyCandidateSigninOtp = authentication.verifySigninOtp;
+
+authentication.getHrAdminRoles = async (req, res, next) => {
+  try {
+    const customRoles = await HrAdminRole.find({ isActive: true })
+      .sort({ name: 1 })
+      .select('_id name accessTabs createdAt');
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        availableTabs: HR_ADMIN_ACCESS_TABS,
+        defaultRoles: DEFAULT_HR_ADMIN_ROLES.map((name) => ({
+          name,
+          type: 'default',
+          accessTabs: DEFAULT_HR_ADMIN_ACCESS_TABS,
+        })),
+        customRoles: customRoles.map((role) => ({
+          _id: role._id,
+          name: role.name,
+          type: 'custom',
+          accessTabs: normalizeHrAdminAccessTabs(role.accessTabs).length
+            ? normalizeHrAdminAccessTabs(role.accessTabs)
+            : DEFAULT_HR_ADMIN_ACCESS_TABS,
+          createdAt: role.createdAt,
+        })),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+authentication.createHrAdminRole = async (req, res, next) => {
+  try {
+    const name = normalizeHrAdminRoleName(req.body?.name);
+    const accessTabs = normalizeHrAdminAccessTabs(req.body?.accessTabs);
+
+    if (!name) {
+      return res.status(400).json({ message: 'Custom role name is required' });
+    }
+
+    if (accessTabs.length === 0) {
+      return res.status(400).json({ message: 'Select at least one tab access for this role' });
+    }
+
+    if (DEFAULT_HR_ADMIN_ROLES.some((role) => role.toLowerCase() === name.toLowerCase())) {
+      return res.status(400).json({ message: 'This role already exists in default roles' });
+    }
+
+    const existingRole = await HrAdminRole.findOne({
+      normalizedName: name.toLowerCase(),
+      isActive: true,
+    });
+
+    if (existingRole) {
+      return res.status(400).json({ message: 'Custom role already exists' });
+    }
+
+    const role = await HrAdminRole.create({
+      name,
+      normalizedName: name.toLowerCase(),
+      accessTabs,
+      createdBy: req.user?.id || null,
+    });
+
+    await User.updateMany(
+      {
+        role: { $in: ['hr-admin', 'sub-admin'] },
+        hrAdminRoleType: 'custom',
+        hrAdminRoleRemoved: true,
+        hrAdminRoleName: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'),
+      },
+      {
+        $set: {
+          isActive: true,
+          hrAdminRoleRemoved: false,
+          hrAdminRoleRef: role._id,
+        },
+      }
+    );
+
+    return res.status(201).json({
+      success: true,
+      message: 'Custom role created successfully',
+      data: {
+        _id: role._id,
+        name: role.name,
+        type: 'custom',
+        accessTabs: role.accessTabs || [],
+        createdAt: role.createdAt,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+authentication.deleteHrAdminRole = async (req, res, next) => {
+  const session = await mongoose.startSession();
+
+  try {
+    session.startTransaction();
+
+    const role = await HrAdminRole.findOne({
+      _id: req.params.id,
+      isActive: true,
+    }).session(session);
+
+    if (!role) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ message: 'Custom role not found' });
+    }
+
+    role.isActive = false;
+    await role.save({ session });
+
+    const affectedUsers = await User.updateMany(
+      {
+        role: { $in: ['hr-admin', 'sub-admin'] },
+        hrAdminRoleType: 'custom',
+        $or: [
+          { hrAdminRoleRef: role._id },
+          { hrAdminRoleName: new RegExp(`^${role.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+        ],
+      },
+      {
+        $set: {
+          isActive: false,
+          hrAdminRoleRemoved: true,
+          hrAdminRoleRef: null,
+        },
+      },
+      { session }
+    );
+
+    await session.commitTransaction();
+    session.endSession();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Custom role deleted successfully',
+      affectedUsers: affectedUsers.modifiedCount || 0,
+    });
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    next(error);
+  }
+};
+
+authentication.getEmployerAccessRoles = async (req, res, next) => {
+  try {
+    const ownerEmployer = getEmployerOwnerIdFromUser(req.user);
+    if (!ownerEmployer) {
+      return res.status(403).json({ message: 'Employer access required' });
+    }
+
+    const customRoles = await EmployerAccessRole.find({
+      ownerEmployer,
+      isActive: true,
+    })
+      .sort({ name: 1 })
+      .select('_id roleId name accessTabs createdAt');
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        availableTabs: EMPLOYER_ACCESS_TABS,
+        defaultRoles: DEFAULT_EMPLOYER_ACCESS_ROLES.map((name) => ({
+          name,
+          type: 'default',
+          accessTabs: DEFAULT_EMPLOYER_ACCESS_TABS,
+        })),
+        customRoles: customRoles.map((role) => ({
+          _id: role._id,
+          roleId: role.roleId,
+          name: role.name,
+          type: 'custom',
+          accessTabs: normalizeEmployerAccessTabs(role.accessTabs).length
+            ? normalizeEmployerAccessTabs(role.accessTabs)
+            : DEFAULT_EMPLOYER_ACCESS_TABS,
+          createdAt: role.createdAt,
+        })),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+authentication.createEmployerAccessRole = async (req, res, next) => {
+  try {
+    if (req.user?.parentEmployer) {
+      return res.status(403).json({ message: 'Only the main employer account can create roles' });
+    }
+
+    const ownerEmployer = req.user?.id;
+    const name = normalizeEmployerRoleName(req.body?.name);
+    const accessTabs = normalizeEmployerAccessTabs(req.body?.accessTabs);
+
+    if (!ownerEmployer) {
+      return res.status(403).json({ message: 'Employer access required' });
+    }
+
+    if (!name) {
+      return res.status(400).json({ message: 'Role name is required' });
+    }
+
+    if (accessTabs.length === 0) {
+      return res.status(400).json({ message: 'Select at least one tab access for this role' });
+    }
+
+    if (getDefaultEmployerAccessRoleName(name)) {
+      return res.status(400).json({ message: 'This role is already available as a default role' });
+    }
+
+    const existingRole = await EmployerAccessRole.findOne({
+      ownerEmployer,
+      normalizedName: name.toLowerCase(),
+      isActive: true,
+    });
+
+    if (existingRole) {
+      return res.status(400).json({ message: 'Role already exists for this company' });
+    }
+
+    const role = await EmployerAccessRole.create({
+      roleId: await generateUniqueEmployerRoleId(),
+      ownerEmployer,
+      name,
+      normalizedName: name.toLowerCase(),
+      accessTabs,
+      createdBy: req.user.id,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: 'Employer access role created successfully',
+      data: {
+        _id: role._id,
+        roleId: role.roleId,
+        name: role.name,
+        type: 'custom',
+        accessTabs: role.accessTabs || [],
+        createdAt: role.createdAt,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+authentication.deleteEmployerAccessRole = async (req, res, next) => {
+  const session = await mongoose.startSession();
+
+  try {
+    session.startTransaction();
+
+    if (req.user?.parentEmployer) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(403).json({ message: 'Only the main employer account can delete roles' });
+    }
+
+    const role = await EmployerAccessRole.findOne({
+      _id: req.params.id,
+      ownerEmployer: req.user.id,
+      isActive: true,
+    }).session(session);
+
+    if (!role) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).json({ message: 'Role not found' });
+    }
+
+    role.isActive = false;
+    await role.save({ session });
+
+    const affectedUsers = await User.updateMany(
+      {
+        role: 'employer',
+        parentEmployer: req.user.id,
+        employerRoleType: 'custom',
+        $or: [
+          { employerRoleRef: role._id },
+          { employerRoleName: new RegExp(`^${role.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+        ],
+      },
+      {
+        $set: {
+          isActive: false,
+          employerRoleRemoved: true,
+          employerRoleRef: null,
+        },
+      },
+      { session }
+    );
+
+    await session.commitTransaction();
+    session.endSession();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Employer access role deleted successfully',
+      affectedUsers: affectedUsers.modifiedCount || 0,
+    });
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    next(error);
+  }
+};
+
+authentication.getEmployerAccessAccounts = async (req, res, next) => {
+  try {
+    const ownerEmployer = getEmployerOwnerIdFromUser(req.user);
+    if (!ownerEmployer) {
+      return res.status(403).json({ message: 'Employer access required' });
+    }
+
+    const users = await User.find({
+      role: 'employer',
+      parentEmployer: ownerEmployer,
+      isActive: true,
+      $or: [{ isDeleted: false }, { isDeleted: { $exists: false } }],
+    })
+      .populate('employerRoleRef', 'roleId name accessTabs')
+      .select('-password')
+      .sort({ createdAt: -1 });
+
+    return res.status(200).json({
+      success: true,
+      data: users,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+authentication.createEmployerAccessAccount = async (req, res, next) => {
+  try {
+    if (req.user?.parentEmployer) {
+      return res.status(403).json({ message: 'Only the main employer account can create access accounts' });
+    }
+
+    const { name, email, password, employerRoleRef, employerRoleName, employerAccessTabs } = req.body;
+    const ownerEmployer = req.user?.id;
+    const normalizedEmail = normalizeEmail(email);
+    const selectedTabs = normalizeEmployerAccessTabs(employerAccessTabs);
+
+    if (!String(name || '').trim() || !normalizedEmail || !String(password || '').trim()) {
+      return res.status(400).json({ message: 'Name, email and password are required' });
+    }
+
+    if (!isValidEmailAddress(normalizedEmail)) {
+      return res.status(400).json({ message: 'Please enter a valid email address' });
+    }
+
+    if (selectedTabs.length === 0) {
+      return res.status(400).json({ message: 'Select at least one tab access for this account' });
+    }
+
+    const defaultRoleName = getDefaultEmployerAccessRoleName(employerRoleName);
+    let role = null;
+
+    if (defaultRoleName) {
+      role = {
+        _id: null,
+        name: defaultRoleName,
+        type: 'default',
+        accessTabs: DEFAULT_EMPLOYER_ACCESS_TABS,
+      };
+    } else if (employerRoleRef && mongoose.Types.ObjectId.isValid(employerRoleRef)) {
+      role = await EmployerAccessRole.findOne({
+        _id: employerRoleRef,
+        ownerEmployer,
+        isActive: true,
+      });
+    }
+
+    if (!role) {
+      return res.status(400).json({ message: 'Please select a valid employer access role' });
+    }
+
+    const existingUser = await User.findOne({ email: normalizedEmail }).select('_id');
+    if (existingUser) {
+      return res.status(400).json({ message: 'User already exists with this email' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const loginId = `EMP-${Date.now().toString().slice(-6)}`;
+
+    const user = await User.create({
+      name: String(name).trim(),
+      email: normalizedEmail,
+      password: hashedPassword,
+      role: 'employer',
+      status: 'approved',
+      createdBy: req.user.id,
+      parentEmployer: ownerEmployer,
+      employerRoleName: role.name,
+      employerRoleType: role.type === 'default' ? 'default' : 'custom',
+      employerRoleRef: role._id || null,
+      employerRoleRemoved: false,
+      employerAccessTabs: selectedTabs,
+      loginId,
+      employerId: await generateUniqueEmployerId(),
+      isSystemGeneratedEmail: false,
+      assignmentSource: 'employer',
+    });
+
+    await sendWelcomeEmail({
+      recipient: normalizedEmail,
+      name: user.name,
+      createdBy: req.user.email || 'Employer',
+      role: 'employer access account',
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: 'Employer access account created successfully',
+      data: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        employerId: user.employerId,
+        loginId: user.loginId,
+        parentEmployer: user.parentEmployer,
+        employerRoleName: user.employerRoleName,
+        employerRoleRef: user.employerRoleRef,
+        employerAccessTabs: user.employerAccessTabs || [],
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+authentication.updateEmployerAccessAccount = async (req, res, next) => {
+  try {
+    if (req.user?.parentEmployer) {
+      return res.status(403).json({ message: 'Only the main employer account can update access accounts' });
+    }
+
+    const ownerEmployer = req.user?.id;
+    const account = await User.findOne({
+      _id: req.params.id,
+      role: 'employer',
+      parentEmployer: ownerEmployer,
+      isActive: true,
+      $or: [{ isDeleted: false }, { isDeleted: { $exists: false } }],
+    });
+
+    if (!account) {
+      return res.status(404).json({ message: 'Access account not found' });
+    }
+
+    const { name, email, password, employerRoleRef, employerRoleName, employerAccessTabs } = req.body;
+    const normalizedEmail = normalizeEmail(email);
+    const selectedTabs = normalizeEmployerAccessTabs(employerAccessTabs);
+
+    if (!String(name || '').trim() || !normalizedEmail) {
+      return res.status(400).json({ message: 'Name and email are required' });
+    }
+
+    if (!isValidEmailAddress(normalizedEmail)) {
+      return res.status(400).json({ message: 'Please enter a valid email address' });
+    }
+
+    if (selectedTabs.length === 0) {
+      return res.status(400).json({ message: 'Select at least one tab access for this account' });
+    }
+
+    const defaultRoleName = getDefaultEmployerAccessRoleName(employerRoleName);
+    let role = null;
+
+    if (defaultRoleName) {
+      role = {
+        _id: null,
+        name: defaultRoleName,
+        type: 'default',
+      };
+    } else if (employerRoleRef && mongoose.Types.ObjectId.isValid(employerRoleRef)) {
+      role = await EmployerAccessRole.findOne({
+        _id: employerRoleRef,
+        ownerEmployer,
+        isActive: true,
+      });
+    }
+
+    if (!role) {
+      return res.status(400).json({ message: 'Please select a valid employer access role' });
+    }
+
+    const existingUser = await User.findOne({
+      email: normalizedEmail,
+      _id: { $ne: account._id },
+    }).select('_id');
+    if (existingUser) {
+      return res.status(400).json({ message: 'User already exists with this email' });
+    }
+
+    account.name = String(name).trim();
+    account.email = normalizedEmail;
+    account.employerRoleName = role.name;
+    account.employerRoleType = role.type === 'default' ? 'default' : 'custom';
+    account.employerRoleRef = role._id || null;
+    account.employerRoleRemoved = false;
+    account.employerAccessTabs = selectedTabs;
+
+    if (String(password || '').trim()) {
+      account.password = await bcrypt.hash(password, 10);
+    }
+
+    await account.save();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Employer access account updated successfully',
+      data: {
+        _id: account._id,
+        name: account.name,
+        email: account.email,
+        role: account.role,
+        employerId: account.employerId,
+        loginId: account.loginId,
+        parentEmployer: account.parentEmployer,
+        employerRoleName: account.employerRoleName,
+        employerRoleRef: account.employerRoleRef,
+        employerAccessTabs: account.employerAccessTabs || [],
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+authentication.deleteEmployerAccessAccount = async (req, res, next) => {
+  try {
+    if (req.user?.parentEmployer) {
+      return res.status(403).json({ message: 'Only the main employer account can delete access accounts' });
+    }
+
+    const account = await User.findOne({
+      _id: req.params.id,
+      role: 'employer',
+      parentEmployer: req.user?.id,
+      isActive: true,
+      $or: [{ isDeleted: false }, { isDeleted: { $exists: false } }],
+    });
+
+    if (!account) {
+      return res.status(404).json({ message: 'Access account not found' });
+    }
+
+    account.isActive = false;
+    account.isDeleted = true;
+    account.deletedAt = new Date();
+    await account.save({ validateBeforeSave: false });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Employer access account deleted successfully',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
 
 
 /**
@@ -1377,7 +2211,7 @@ authentication.getUsersByRole = async (req, res, next) => {
      * HR-ADMIN RULE:
      * Show only users assigned to this HR-admin
      */
-    if (loggedInUser.role === 'hr-admin' && !allScopeRequested) {
+    if (isSubAdminRole(loggedInUser.role) && !allScopeRequested) {
       const assignedIds = [
         ...(loggedInUser.employerIds || []),
         ...(loggedInUser.candidateIds || []),
@@ -1414,6 +2248,8 @@ authentication.getUsersByRole = async (req, res, next) => {
     const limitNumber = Math.max(1, parseInt(limit, 10) || 20);
     const skip = (pageNumber - 1) * limitNumber;
     const usersPromise = User.find(query, { password: 0 })
+      .populate('parentEmployer', 'name employerId')
+      .populate('employerRoleRef', 'roleId name')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limitNumber);
@@ -1465,7 +2301,7 @@ authentication.updateUserStatus = async (req, res, next) => {
       targetUser.assignmentSource === 'superadmin-assigned' &&
       ['candidate', 'employer'].includes(targetUser.role)
     ) {
-      if (req.user.role !== 'hr-admin') {
+      if (!isSubAdminRole(req.user.role)) {
         return res.status(403).json({
           success: false,
           message: 'Only the assigned HR Admin can approve this user'
@@ -1491,6 +2327,7 @@ authentication.updateUserStatus = async (req, res, next) => {
       candidate: '/candidates-dashboard/notifications',
       employer: '/employers-dashboard/dashboard',
       'hr-admin': '/hr-admin-dashboard/dashboard',
+      'sub-admin': '/hr-admin-dashboard/dashboard',
       superadmin: '/super-admin-dashboard/dashboard',
     }[user.role] || '/notification';
 
@@ -1596,7 +2433,7 @@ authentication.signout = (req, res) => {
 authentication.getCurrentUser = async (req, res, next) => {
   try {
     const user = await User.findById(req.user.id).select(
-      '_id name email role status loginId isSystemGeneratedEmail activePaymentPlan paymentPlanAssignedAt'
+      '_id name email role hrAdminRoleName hrAdminRoleRemoved hrAdminAccessTabs parentEmployer employerRoleName employerRoleRemoved employerAccessTabs status loginId isSystemGeneratedEmail activePaymentPlan paymentPlanAssignedAt'
     );
 
     if (!user) {
@@ -1610,6 +2447,13 @@ authentication.getCurrentUser = async (req, res, next) => {
         name: user.name,
         email: user.isSystemGeneratedEmail ? null : user.email,
         role: user.role,
+        hrAdminRoleName: user.hrAdminRoleName || '',
+        hrAdminRoleRemoved: user.hrAdminRoleRemoved || false,
+        hrAdminAccessTabs: user.hrAdminAccessTabs || [],
+        parentEmployer: user.parentEmployer || null,
+        employerRoleName: user.employerRoleName || '',
+        employerRoleRemoved: user.employerRoleRemoved || false,
+        employerAccessTabs: user.employerAccessTabs || [],
         status: user.status,
         loginId: user.loginId || null,
         isSystemGeneratedEmail: user.isSystemGeneratedEmail,
@@ -1652,7 +2496,7 @@ authentication.deleteUserProfile = async (req, res, next) => {
       loggedInUser.id.toString() === targetUserId.toString();
 
     const isAdmin =
-      ['hr-admin', 'superadmin'].includes(loggedInUser.role);
+      ['hr-admin', 'sub-admin', 'superadmin'].includes(loggedInUser.role);
 
     // Candidates & employers can delete ONLY themselves
     if (!isSelfDelete && !isAdmin) {
@@ -1665,7 +2509,7 @@ authentication.deleteUserProfile = async (req, res, next) => {
 
     // HR-Admin should delete only candidate/employer
     if (
-      loggedInUser.role === 'hr-admin' &&
+      isSubAdminRole(loggedInUser.role) &&
       !['candidate', 'employer'].includes(targetUser.role)
     ) {
       await session.abortTransaction();
@@ -1884,6 +2728,13 @@ authentication.googleLogin = async (req, res, next) => {
                 name: user.name,
                 email: user.email,
                 role: user.role,
+                hrAdminRoleName: user.hrAdminRoleName || '',
+                hrAdminRoleRemoved: user.hrAdminRoleRemoved || false,
+                hrAdminAccessTabs: user.hrAdminAccessTabs || [],
+                parentEmployer: user.parentEmployer || null,
+                employerRoleName: user.employerRoleName || '',
+                employerRoleRemoved: user.employerRoleRemoved || false,
+                employerAccessTabs: user.employerAccessTabs || [],
                 status: user.status,
                 activePaymentPlan: user.activePaymentPlan || null
             }
