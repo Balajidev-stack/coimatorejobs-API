@@ -6,9 +6,13 @@ const isProd = process.env.NODE_ENV === "production";
 
 // mail delay helper
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+const liveHrMailAddress = process.env.MAIL_HR || 'hr@coimbatorejobs.in';
 const defaultFromAddress = isProd
-  ? (process.env.MAIL_FROM || 'no-reply@coimbatorejobs.in')
+  ? liveHrMailAddress
   : (process.env.EMAIL_USER || process.env.MAIL_FROM || 'no-reply@coimbatorejobs.in');
+const primaryInboundMailAddress = isProd
+  ? liveHrMailAddress
+  : (process.env.EMAIL_USER || process.env.SUPERADMIN_EMAIL || process.env.MAIL_GENERAL);
 
 const escapeHtml = (value = '') =>
   String(value ?? '')
@@ -19,6 +23,13 @@ const escapeHtml = (value = '') =>
     .replace(/'/g, '&#39;');
 
 let transporter;
+const smtpPoolOptions = {
+  pool: true,
+  maxConnections: Number(process.env.SMTP_MAX_CONNECTIONS || 3),
+  maxMessages: Number(process.env.SMTP_MAX_MESSAGES || 100),
+  rateDelta: 1000,
+  rateLimit: Number(process.env.SMTP_RATE_LIMIT || 5),
+};
 
 if (isProd) {
   // AWS SES in Production
@@ -33,6 +44,10 @@ if (isProd) {
     tls: {
       rejectUnauthorized: false,      // Required for SES in some environments
     },
+    ...smtpPoolOptions,
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 10000,
   });
 } else {
   // Development â†’ Mailtrap
@@ -59,7 +74,8 @@ if (isProd) {
         },
         connectionTimeout: 10000,
         greetingTimeout: 10000,
-        socketTimeout: 10000
+        socketTimeout: 10000,
+        ...smtpPoolOptions,
   });
 
 }
@@ -119,12 +135,24 @@ transporter.verify((error) => {
 
 
 // BASE EMAIL SENDER (DO NOT CHANGE UI)
-const sendMail = async ({ to, subject, html, text = '', cc = [], from, attachments = [] }) => {
+const cleanRecipients = (recipients = []) =>
+  (Array.isArray(recipients) ? recipients : [recipients]).filter(Boolean);
+
+const resolveFromAddress = (from) => {
+  if (isProd) {
+    return `"Coimbatore Jobs" <${defaultFromAddress}>`;
+  }
+
+  return from || `"Coimbatore Jobs" <${defaultFromAddress}>`;
+};
+
+const sendMail = async ({ to, subject, html, text = '', cc = [], from, replyTo, attachments = [] }) => {
   try {
     const info = await transporter.sendMail({
-      from: from || `"Coimbatore Jobs" <${defaultFromAddress}>`,
+      from: resolveFromAddress(from),
       to,
-      cc,
+      cc: cleanRecipients(cc),
+      replyTo,
       subject,
       text,
       html,
@@ -319,7 +347,6 @@ const sendLoginOtpEmail = async ({ recipient, name, otp, expiresInMinutes = 10, 
           </p>
         </div>
       `,
-      cc: [process.env.MAIL_SECURITY]
     });
 
     console.log(`${roleLabel} login OTP email sent to ${recipient}`);
@@ -813,10 +840,11 @@ export const sendContactEmails = async ({
   `;
 
   await sendMail({
-    to: process.env.MAIL_GENERAL || process.env.SUPERADMIN_EMAIL,
+    to: primaryInboundMailAddress,
     subject: `New Contact Inquiry (${formType})`,
     html: adminHtml,
-    cc: [process.env.MAIL_SUPPORT]
+    replyTo: email,
+    cc: isProd ? [] : [process.env.MAIL_SUPPORT]
   });
 
   // User auto-reply
@@ -835,8 +863,10 @@ export const sendContactEmails = async ({
     <strong>Coimbatore Jobs Team</strong></p>
   `;
 
-   // Small delay for Mailtrap
-  await new Promise(resolve => setTimeout(resolve, 8000)); //remove when in production
+   // Small delay only for local Gmail/Mailtrap testing.
+  if (!isProd) {
+    await new Promise(resolve => setTimeout(resolve, 8000));
+  }
 
   await sendMail({
     to: email,

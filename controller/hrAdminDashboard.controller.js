@@ -2373,7 +2373,10 @@ hrAdminDashboardController.getCandidateActivityReport = async (req, res, next) =
         createdAt: dateFilter,
       })
         .populate('candidate', 'name email status')
-        .select('candidate fullName email phone jobTitle status resume experience location createdAt')
+        .populate('industry', 'name')
+        .populate('functionalAreas', 'name')
+        .populate('role', 'name')
+        .select('candidate fullName email phone jobTitle status resume experience location industry functionalAreas role createdAt')
         .lean(),
 
       CandidateProfile.find({
@@ -2472,6 +2475,16 @@ hrAdminDashboardController.getCandidateActivityReport = async (req, res, next) =
       const completed = checks.filter(Boolean).length;
       return `${Math.round((completed / checks.length) * 100)}%`;
     };
+    const getFieldName = (value) => {
+      if (!value) return '';
+      if (typeof value === 'string') return value;
+      return value.name || '';
+    };
+    const getFunctionalAreaNames = (profile) => {
+      const areas = Array.isArray(profile?.functionalAreas) ? profile.functionalAreas : [];
+      const names = areas.map(getFieldName).filter(Boolean);
+      return names.length ? names.join(', ') : 'N/A';
+    };
     const getCompanyName = (application) => application.jobPost?.companyProfile?.companyName || 'N/A';
 
     const generatedBy =
@@ -2479,7 +2492,7 @@ hrAdminDashboardController.getCandidateActivityReport = async (req, res, next) =
         ? 'Super Admin'
         : req.user?.name || req.user?.email || 'HR Admin';
 
-    sheet.mergeCells('A1:C1');
+    sheet.mergeCells('A1:K1');
     sheet.getCell('A1').value = 'Candidate Activity Report';
     sheet.getCell('A1').font = { size: 16, bold: true };
     sheet.getCell('A1').alignment = { horizontal: 'center' };
@@ -2513,12 +2526,15 @@ hrAdminDashboardController.getCandidateActivityReport = async (req, res, next) =
     addTotalRow('Total Registrations :', newCandidates.length);
 
     addSectionTitle('2. Newly Created Candidate Profiles');
-    addHeaderRow(['S.No', 'Candidate Name', 'Email', 'Profile Completion', 'Resume Uploaded', 'Experience', 'Preferred Location', 'Created On']);
+    addHeaderRow(['S.No', 'Candidate Name', 'Email', 'Industry', 'Functional Area', 'Primary Role', 'Profile Completion', 'Resume Uploaded', 'Experience', 'Preferred Location', 'Created On']);
     createdProfiles.forEach((profile, index) => {
       sheet.addRow([
         index + 1,
         profile.fullName || profile.candidate?.name || 'N/A',
         profile.email || profile.candidate?.email || 'N/A',
+        getFieldName(profile.industry) || 'N/A',
+        getFunctionalAreaNames(profile),
+        getFieldName(profile.role) || profile.jobTitle || 'N/A',
         calculateProfileCompletion(profile),
         profile.resume ? 'Yes' : 'No',
         profile.experience || 'N/A',
@@ -2581,6 +2597,9 @@ hrAdminDashboardController.getCandidateActivityReport = async (req, res, next) =
       { width: 12 },
       { width: 28 },
       { width: 32 },
+      { width: 28 },
+      { width: 32 },
+      { width: 28 },
       { width: 20 },
       { width: 28 },
       { width: 20 },

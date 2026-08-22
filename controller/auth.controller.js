@@ -46,6 +46,17 @@ const DEFAULT_HR_ADMIN_ROLES = [
 const DEFAULT_EMPLOYER_ACCESS_ROLES = DEFAULT_HR_ADMIN_ROLES;
 const SUB_ADMIN_ROLES = ['hr-admin', 'sub-admin'];
 const isSubAdminRole = (role = '') => SUB_ADMIN_ROLES.includes(role);
+const dispatchLoginOtpEmail = (payload) => {
+  setImmediate(() => {
+    sendLoginOtpEmail(payload).catch((error) => {
+      console.error('Login OTP email failed after response:', {
+        recipient: payload?.recipient,
+        role: payload?.role,
+        error: error?.message || error
+      });
+    });
+  });
+};
 const HR_ADMIN_ACCESS_TABS = [
   { label: 'Dashboard', path: '/hr-admin-dashboard/dashboard' },
   { label: 'Create & View Candidates', path: '/hr-admin-dashboard/create-candidates' },
@@ -1183,7 +1194,7 @@ authentication.signin = async (req, res, next) => {
           user.loginOtpAttempts = 0;
           await user.save({ validateBeforeSave: false });
 
-          await sendLoginOtpEmail({
+          dispatchLoginOtpEmail({
             recipient: otpRecipient,
             name: user.name,
             otp,
