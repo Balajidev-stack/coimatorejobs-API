@@ -1,4 +1,6 @@
 import mongoose from "mongoose";
+import ExcelJS from 'exceljs';
+import { Readable } from 'stream';
 import JobPost from '../models/jobs.model.js';
 import CompanyProfile from '../models/companyProfile.model.js';
 import User from '../models/user.model.js';
@@ -30,6 +32,63 @@ const jobsController = {};
 const MONTHLY_RESUME_LIMIT = 5;
 const JOB_ID_PREFIX = "JOB";
 const INTERNAL_EMPLOYER_EMAIL_REGEX = /^employer_.*_@internal\.coimbatorejobs\.in$/i;
+const BULK_JOB_TEMPLATE_COLUMNS = [
+  { header: 'S.No (Mandatory)', key: 'serialNumber', width: 18 },
+  { header: 'Industry (Mandatory)', key: 'industry', width: 28 },
+  { header: 'Functional Area (Department) (Mandatory)', key: 'functionalAreas', width: 36 },
+  { header: 'Role / Job Title (Mandatory)', key: 'title', width: 28 },
+  { header: 'Collar Category (Mandatory)', key: 'collarCategory', width: 24 },
+  { header: 'Job Description (Mandatory)', key: 'description', width: 44 },
+  { header: 'Required Skills', key: 'skills', width: 30 },
+  { header: 'Contact Email (Mandatory)', key: 'contactEmail', width: 30 },
+  { header: 'Contact Username', key: 'contactUsername', width: 24 },
+  { header: 'Minimum Salary (Mandatory)', key: 'salaryMin', width: 22 },
+  { header: 'Maximum Salary (Mandatory)', key: 'salaryMax', width: 22 },
+  { header: 'Salary Unit (Mandatory)', key: 'salaryUnit', width: 22 },
+  { header: 'Experience (Mandatory)', key: 'experience', width: 20 },
+  { header: 'Qualification Type (Mandatory)', key: 'qualificationType', width: 28 },
+  { header: 'Exact Degree (Mandatory)', key: 'qualification', width: 32 },
+  { header: 'Gender', key: 'gender', width: 18 },
+  { header: 'Job Type (Mandatory)', key: 'jobType', width: 20 },
+  { header: 'Career Level (Mandatory)', key: 'careerLevel', width: 22 },
+  { header: 'Application Deadline (Mandatory)', key: 'applicationDeadline', width: 26 },
+  { header: 'Number of Openings (Mandatory)', key: 'positions', width: 26 },
+  { header: 'Max Applicants Allowed', key: 'maxApplicants', width: 24 },
+  { header: 'Target Cities (Mandatory)', key: 'cities', width: 30 },
+  { header: 'Country (Mandatory)', key: 'country', width: 20 },
+  { header: 'Office Address (HQ) (Mandatory)', key: 'completeAddress', width: 40 },
+  { header: 'Work Arrangement', key: 'remoteWork', width: 20 },
+  { header: 'Job Status', key: 'jobStatus', width: 18 },
+];
+
+const BULK_JOB_SAMPLE_ROW = {
+  serialNumber: 'EX',
+  industry: 'Information Technology',
+  functionalAreas: 'Software Development',
+  title: 'React Developer',
+  collarCategory: 'White Collar',
+  description: 'Build and maintain web applications.',
+  skills: 'React, JavaScript, Next.js',
+  contactEmail: 'hr@example.com',
+  contactUsername: 'HR Team',
+  salaryMin: '3',
+  salaryMax: '6',
+  salaryUnit: 'LPA',
+  experience: '1-3 Years',
+  qualificationType: 'ALL',
+  qualification: 'BE CSE, BTech AI DS',
+  gender: 'No Preference',
+  jobType: 'Full-time',
+  careerLevel: 'Mid Level',
+  applicationDeadline: '2026-12-31',
+  positions: '5',
+  maxApplicants: '100',
+  cities: 'Coimbatore, Chennai',
+  country: 'India',
+  completeAddress: 'Coimbatore office address',
+  remoteWork: 'On-site',
+  jobStatus: 'Published',
+};
 
 const buildJobId = () =>
   `${JOB_ID_PREFIX}-${crypto.randomInt(10000000, 100000000)}`;
@@ -384,6 +443,302 @@ const resolveSkillIds = async (skillsInput = []) => {
   return Array.from(new Set(ids.map((id) => String(id))));
 };
 
+const splitBulkValues = (value) =>
+  toSafeString(value)
+    .split(/[,;\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+const hasBulkValue = (value) => {
+  if (value instanceof Date) return true;
+  return Boolean(toSafeString(value));
+};
+
+const normalizeHeaderKey = (value) =>
+  toSafeString(value)
+    .replace(/\(mandatory\)/ig, '')
+    .replace(/[^a-z0-9]+/gi, '')
+    .toLowerCase();
+
+const BULK_HEADER_KEY_MAP = new Map(
+  BULK_JOB_TEMPLATE_COLUMNS.map((column) => [normalizeHeaderKey(column.header), column.key])
+);
+
+const getCellText = (cell) => {
+  const value = cell?.value;
+  if (value === null || value === undefined) return '';
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  if (typeof value === 'object') {
+    if (value.text) return toSafeString(value.text);
+    if (value.result !== undefined) return toSafeString(value.result);
+    if (Array.isArray(value.richText)) return value.richText.map((part) => part.text || '').join('').trim();
+    if (value.hyperlink && value.text) return toSafeString(value.text);
+  }
+  return toSafeString(value);
+};
+
+const getCellDate = (cell) => {
+  const value = cell?.value;
+  if (value instanceof Date) return value;
+  const text = getCellText(cell);
+  if (!text) return null;
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const getBulkJobCycleDateFilter = (cycle = 'Monthly') => {
+  if (cycle === 'Total') return {};
+
+  const now = new Date();
+  const start = new Date(now);
+  if (cycle === 'Daily') {
+    start.setHours(0, 0, 0, 0);
+  } else {
+    start.setDate(1);
+    start.setHours(0, 0, 0, 0);
+  }
+  return { createdAt: { $gte: start } };
+};
+
+const ensureBulkJobPlanLimit = async (req, res, employerId, incomingCount) => {
+  if (req.user?.role !== 'employer') return true;
+
+  const plan = await resolveEmployerPlan(req.user.id);
+  if (!plan) {
+    res.status(403).json({
+      success: false,
+      code: 'PLAN_REQUIRED',
+      message: 'Your employer account needs an active payment plan to use this feature.',
+    });
+    return false;
+  }
+
+  const feature = getFeatureLimit(plan, 'jobPostingLimit', 'jobLimit');
+  if (!feature.enabled || feature.limit === 0) {
+    res.status(403).json({
+      success: false,
+      code: 'PLAN_LIMIT_REACHED',
+      message: 'Job posting is not included in your current plan.',
+    });
+    return false;
+  }
+
+  if (feature.limit === -1) return true;
+
+  const used = await JobPost.countDocuments({
+    employer: employerId || req.user.id,
+    ...getBulkJobCycleDateFilter(feature.cycle),
+  });
+  const remaining = Math.max(Number(feature.limit || 0) - used, 0);
+
+  if (incomingCount > remaining) {
+    res.status(429).json({
+      success: false,
+      code: 'PLAN_LIMIT_REACHED',
+      message: `Bulk upload has ${incomingCount} job(s), but your current plan allows only ${remaining} more job post(s) this ${feature.cycle.toLowerCase()} cycle.`,
+      limit: feature.limit,
+      used,
+      remaining,
+      cycle: feature.cycle,
+    });
+    return false;
+  }
+
+  return true;
+};
+
+const resolveBulkCompanyProfile = async ({ employerId }) => {
+  const profiles = await CompanyProfile.find({ employer: employerId })
+    .select('_id companyName status employer email')
+    .sort({ createdAt: 1 });
+  if (!profiles.length) {
+    throw new NotFoundError('Company profile not found for this employer, Please create a company profile first.');
+  }
+
+  const profile = profiles.find((item) => item.status === 'approved');
+  if (!profile) throw new ForbiddenError('Company profile must be approved before posting jobs');
+
+  return profile;
+};
+
+const buildBulkJobPayload = (row, companyProfileDoc, req) => {
+  const requiredColumns = [
+    ['industry', 'Industry'],
+    ['functionalAreas', 'Functional Area (Department)'],
+    ['title', 'Role / Job Title'],
+    ['collarCategory', 'Collar Category'],
+    ['description', 'Job Description'],
+    ['contactEmail', 'Contact Email'],
+    ['salaryMin', 'Minimum Salary'],
+    ['salaryMax', 'Maximum Salary'],
+    ['salaryUnit', 'Salary Unit'],
+    ['experience', 'Experience'],
+    ['qualificationType', 'Qualification Type'],
+    ['qualification', 'Exact Degree'],
+    ['jobType', 'Job Type'],
+    ['careerLevel', 'Career Level'],
+    ['applicationDeadline', 'Application Deadline'],
+    ['positions', 'Number of Openings'],
+    ['cities', 'Target Cities'],
+    ['country', 'Country'],
+    ['completeAddress', 'Office Address (HQ)'],
+  ];
+  const missingColumns = requiredColumns
+    .filter(([key]) => !hasBulkValue(row[key]))
+    .map(([, label]) => label);
+
+  if (missingColumns.length) {
+    throw new BadRequestError(`Missing mandatory column values: ${missingColumns.join(', ')}`);
+  }
+
+  const salaryUnit = toSafeString(row.salaryUnit);
+  const normalizedSalaryUnit = salaryUnit
+    .toLowerCase()
+    .replace(/₹/g, 'rs')
+    .replace(/\s+/g, '');
+  const isMonthlyK = normalizedSalaryUnit.includes('k/month') || normalizedSalaryUnit.includes('kpermonth') || normalizedSalaryUnit.includes('rs k/month'.replace(/\s+/g, ''));
+  const offeredSalary = isMonthlyK
+    ? `${toSafeString(row.salaryMin)}K - ${toSafeString(row.salaryMax)}K /Month`
+    : `${toSafeString(row.salaryMin)} - ${toSafeString(row.salaryMax)} LPA`;
+
+  return {
+    title: toSafeString(row.title),
+    description: toSafeString(row.description),
+    contactEmail: toSafeString(row.contactEmail) || companyProfileDoc.email,
+    contactUsername: toSafeString(row.contactUsername),
+    jobType: toSafeString(row.jobType) || 'Full-time',
+    offeredSalary,
+    careerLevel: toSafeString(row.careerLevel),
+    experience: toSafeString(row.experience),
+    gender: toSafeString(row.gender) || 'No Preference',
+    industry: toSafeString(row.industry),
+    qualification: splitBulkValues(row.qualification),
+    applicationDeadline: row.applicationDeadline,
+    location: {
+      country: toSafeString(row.country) || 'India',
+      city: splitBulkValues(row.cities),
+      completeAddress: toSafeString(row.completeAddress),
+    },
+    remoteWork: toSafeString(row.remoteWork) || 'On-site',
+    positions: { total: Number(row.positions) || 0 },
+    maxApplicants: row.maxApplicants ? Number(row.maxApplicants) : null,
+    companyProfile: companyProfileDoc._id,
+    role: toSafeString(row.title),
+    collarCategory: toSafeString(row.collarCategory),
+    skills: splitBulkValues(row.skills),
+    functionalAreas: splitBulkValues(row.functionalAreas),
+    postedBy: req.user.id,
+  };
+};
+
+const createJobPostFromPayload = async ({ payload, employerId, userRole, actorId }) => {
+  const {
+    title,
+    description,
+    contactEmail,
+    contactUsername,
+    jobType,
+    offeredSalary,
+    salary,
+    careerLevel,
+    experience,
+    gender,
+    industry,
+    qualification,
+    applicationDeadline,
+    location,
+    remoteWork,
+    positions,
+    maxApplicants,
+    companyProfile,
+    role,
+    collarCategory,
+    skills = [],
+    functionalAreas = [],
+  } = payload;
+
+  const requiredFields = [
+    'title', 'description', 'contactEmail', 'jobType',
+    'offeredSalary', 'careerLevel', 'experience', 'qualification',
+    'applicationDeadline', 'positions', 'location', 'functionalAreas', 'collarCategory'
+  ];
+  const missingFields = requiredFields.filter(field => !payload[field]);
+  if (missingFields.length > 0) {
+    throw new BadRequestError(`Missing required fields: ${missingFields.join(', ')}`);
+  }
+
+  const normalizedContactEmail = normalizeEmail(contactEmail);
+  if (!isValidEmailAddress(normalizedContactEmail)) {
+    throw new BadRequestError('Please enter a valid contact email address');
+  }
+
+  if (!Array.isArray(qualification) || qualification.length === 0) {
+    throw new BadRequestError('At least one qualification is required');
+  }
+
+  if (!location || !location.country || !Array.isArray(location.city) || location.city.length === 0 || !location.completeAddress) {
+    throw new BadRequestError('Complete location details are required (country, at least one city, completeAddress)');
+  }
+
+  const resolvedIndustryId = await resolveIndustryId(industry);
+  const resolvedFunctionalAreaIds = await resolveFunctionalAreaIds(functionalAreas, resolvedIndustryId);
+  const resolvedRoleId = await resolveRoleId(role, resolvedFunctionalAreaIds, actorId, collarCategory);
+  const resolvedSkillIds = await resolveSkillIds(skills);
+
+  if (!positions || !positions.total || Number(positions.total) < 1) {
+    throw new BadRequestError('Positions must be at least 1');
+  }
+
+  const deadlineDate = applicationDeadline instanceof Date ? applicationDeadline : new Date(applicationDeadline);
+  if (Number.isNaN(deadlineDate.getTime())) {
+    throw new BadRequestError('Invalid application deadline');
+  }
+
+  const normalizedSalary = normalizeSalaryInput(salary);
+  const isPostedByAdmin = ['hr-admin', 'superadmin'].includes(userRole);
+
+  const newJobPost = new JobPost({
+    jobId: await generateUniqueJobId(),
+    employer: employerId,
+    postedBy: actorId,
+    companyProfile,
+    title,
+    description,
+    contactEmail: normalizedContactEmail,
+    contactUsername,
+    jobType,
+    offeredSalary,
+    ...(normalizedSalary ? { salary: normalizedSalary } : {}),
+    careerLevel,
+    experience,
+    gender: gender || 'No Preference',
+    functionalAreas: resolvedFunctionalAreaIds,
+    industry: resolvedIndustryId,
+    role: resolvedRoleId,
+    collarCategory,
+    skills: resolvedSkillIds,
+    qualification,
+    applicationDeadline: deadlineDate,
+    maxApplicants: maxApplicants ? Number(maxApplicants) : null,
+    location: {
+      country: location.country,
+      city: location.city,
+      completeAddress: location.completeAddress,
+    },
+    positions: {
+      total: Number(positions.total),
+      remaining: Number(positions.total),
+    },
+    remoteWork: remoteWork || 'On-site',
+    status: isPostedByAdmin ? 'Draft' : 'Published',
+    jobApprovalStatus: isPostedByAdmin ? 'pending' : 'not_required',
+    jobApprovalRequestedAt: isPostedByAdmin ? new Date() : null,
+  });
+
+  await newJobPost.save();
+  return newJobPost;
+};
+
 const getAdminAlertUsers = async () => {
   const recipientEmails = new Set();
 
@@ -410,6 +765,186 @@ const getAdminAlertUsers = async () => {
     emails: Array.from(recipientEmails),
     users: adminUsers,
   };
+};
+
+jobsController.downloadBulkJobTemplate = async (req, res, next) => {
+  try {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Bulk Jobs');
+    worksheet.columns = BULK_JOB_TEMPLATE_COLUMNS;
+    worksheet.addRow(BULK_JOB_SAMPLE_ROW);
+
+    const headerRow = worksheet.getRow(1);
+    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    headerRow.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF1967D2' },
+    };
+    headerRow.alignment = { vertical: 'middle', wrapText: true };
+    headerRow.eachCell((cell) => {
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFC7D2FE' } },
+        left: { style: 'thin', color: { argb: 'FFC7D2FE' } },
+        bottom: { style: 'thin', color: { argb: 'FFC7D2FE' } },
+        right: { style: 'thin', color: { argb: 'FFC7D2FE' } },
+      };
+    });
+
+    worksheet.views = [{ state: 'frozen', ySplit: 1 }];
+    worksheet.getRow(2).alignment = { wrapText: true };
+    worksheet.getColumn('applicationDeadline').numFmt = 'yyyy-mm-dd';
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename=bulk-job-upload-format.xlsx');
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    next(error);
+  }
+};
+
+jobsController.bulkUploadJobPosts = async (req, res, next) => {
+  try {
+    const file = req.file;
+    if (!file?.buffer) {
+      throw new BadRequestError('Excel file is required');
+    }
+
+    const { id: loggedInUserId, role: userRole } = req.user;
+    let employerId = userRole === 'employer' ? getEffectiveEmployerId(req.user) : loggedInUserId;
+
+    if (['hr-admin', 'superadmin'].includes(userRole)) {
+      if (!req.body.employerId) {
+        throw new BadRequestError('employerId is required for HR-Admin or Superadmin');
+      }
+      employerId = req.body.employerId;
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(employerId)) {
+      throw new BadRequestError('Invalid employerId');
+    }
+
+    const workbook = new ExcelJS.Workbook();
+    const fileName = String(file.originalname || '').toLowerCase();
+    let worksheet = null;
+    if (fileName.endsWith('.csv')) {
+      worksheet = await workbook.csv.read(Readable.from(file.buffer));
+    } else {
+      await workbook.xlsx.load(file.buffer);
+      worksheet = workbook.worksheets[0];
+    }
+    if (!worksheet) throw new BadRequestError('Excel file has no worksheet');
+
+    const headerRow = worksheet.getRow(1);
+    const columnKeyByNumber = new Map();
+    headerRow.eachCell((cell, colNumber) => {
+      const key = BULK_HEADER_KEY_MAP.get(normalizeHeaderKey(getCellText(cell)));
+      if (key) columnKeyByNumber.set(colNumber, key);
+    });
+
+    const missingTemplateColumns = BULK_JOB_TEMPLATE_COLUMNS
+      .filter((column) => !Array.from(columnKeyByNumber.values()).includes(column.key))
+      .map((column) => column.header);
+
+    if (missingTemplateColumns.length) {
+      throw new BadRequestError(`Invalid template. Missing columns: ${missingTemplateColumns.join(', ')}`);
+    }
+
+    const parsedRows = [];
+    worksheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return;
+      const item = { rowNumber };
+      let hasValue = false;
+      for (const [colNumber, key] of columnKeyByNumber.entries()) {
+        const cell = row.getCell(colNumber);
+        item[key] = key === 'applicationDeadline' ? getCellDate(cell) || getCellText(cell) : getCellText(cell);
+        if (toSafeString(item[key])) hasValue = true;
+      }
+      if (hasValue) parsedRows.push(item);
+    });
+
+    const jobRows = [];
+    const serialErrors = [];
+
+    for (const row of parsedRows) {
+      const serialText = toSafeString(row.serialNumber);
+      if (serialText.toUpperCase() === 'EX') continue;
+
+      if (!/^\d+$/.test(serialText)) {
+        serialErrors.push({
+          rowNumber: row.rowNumber,
+          message: 'S.No is mandatory and must be a number like 1, 2, 3',
+        });
+        continue;
+      }
+
+      jobRows.push({
+        ...row,
+        serialNumber: Number(serialText),
+      });
+    }
+
+    if (serialErrors.length) {
+      return res.status(400).json({
+        success: false,
+        message: `${serialErrors.length} row(s) have invalid S.No`,
+        createdCount: 0,
+        failedCount: serialErrors.length,
+        createdJobs: [],
+        failedRows: serialErrors,
+      });
+    }
+
+    if (!jobRows.length) {
+      throw new BadRequestError('Excel file does not contain any job rows');
+    }
+
+    const canPostByPlan = await ensureBulkJobPlanLimit(req, res, employerId, jobRows.length);
+    if (!canPostByPlan) return;
+
+    const createdJobs = [];
+    const failedRows = [];
+    const companyProfileDoc = await resolveBulkCompanyProfile({ employerId });
+
+    for (const row of jobRows) {
+      try {
+        const payload = buildBulkJobPayload(row, companyProfileDoc, req);
+        const jobPost = await createJobPostFromPayload({
+          payload,
+          employerId,
+          userRole,
+          actorId: req.user.id,
+        });
+        createdJobs.push({
+          rowNumber: row.rowNumber,
+          id: jobPost._id,
+          jobId: jobPost.jobId,
+          title: jobPost.title,
+        });
+      } catch (error) {
+        failedRows.push({
+          rowNumber: row.rowNumber,
+          message: error.message || 'Failed to create job',
+        });
+      }
+    }
+
+    const status = createdJobs.length && failedRows.length ? 207 : createdJobs.length ? 201 : 400;
+    return res.status(status).json({
+      success: createdJobs.length > 0 && failedRows.length === 0,
+      partialSuccess: createdJobs.length > 0 && failedRows.length > 0,
+      message: failedRows.length
+        ? `${createdJobs.length} job(s) uploaded, ${failedRows.length} row(s) failed`
+        : `${createdJobs.length} job(s) uploaded successfully`,
+      createdCount: createdJobs.length,
+      failedCount: failedRows.length,
+      createdJobs,
+      failedRows,
+    });
+  } catch (error) {
+    next(error);
+  }
 };
 
 /**

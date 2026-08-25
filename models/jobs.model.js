@@ -179,7 +179,6 @@ const jobPostSchema = new mongoose.Schema({
   collarCategory: {
     type: String,
     required: [true, 'Collar category is required'],
-    enum: COLLAR_CATEGORIES,
     trim: true,
   },
   skills: {

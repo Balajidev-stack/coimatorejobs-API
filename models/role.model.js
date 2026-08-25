@@ -59,7 +59,6 @@ const roleSchema = new mongoose.Schema({
 
   defaultCollarCategory: {
     type: String,
-    enum: COLLAR_CATEGORIES,
     default: null,
     trim: true,
   },
