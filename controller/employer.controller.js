@@ -455,8 +455,10 @@ employerController.createCompanyProfile = async (req, res, next) => {
       throw new BadRequestError(`Missing required fields: ${missingFields.join(', ')}`);
     }
 
-    // Determine initial status
-    const isAdminCreator = ['hr-admin', 'superadmin'].includes(role);
+    // Determine initial status. Employer access-management sub accounts act
+    // for the owner employer, so profiles they create are owner-approved.
+    const isEmployerAccessAccount = role === 'employer' && Boolean(req.user.parentEmployer);
+    const shouldAutoApproveProfile = ['hr-admin', 'superadmin'].includes(role) || isEmployerAccessAccount;
 
     // Handle file uploads
     const files = req.files || {};
@@ -473,9 +475,9 @@ employerController.createCompanyProfile = async (req, res, next) => {
       employer: employerId,
       createdBy: loggedInUserId, // HR/Admin or Employer
 
-      status: isAdminCreator ? 'approved' : 'pending',
-      approvedBy: isAdminCreator ? loggedInUserId : null,
-      approvedAt: isAdminCreator ? new Date() : null,
+      status: shouldAutoApproveProfile ? 'approved' : 'pending',
+      approvedBy: shouldAutoApproveProfile ? loggedInUserId : null,
+      approvedAt: shouldAutoApproveProfile ? new Date() : null,
 
       industry: industryId,
       functionalAreas: faIds,
@@ -596,30 +598,45 @@ employerController.createCompanyProfile = async (req, res, next) => {
  */
 employerController.getPendingCompanyProfiles = async (req, res, next) => {
   try {
-    const { page = 1, limit = 10 } = req.query;
+    const { page = 1, limit = 10, status = 'pending' } = req.query;
+    const normalizedStatus = String(status || 'pending').trim().toLowerCase();
 
-    // Base filter: only pending profiles
-    const filter = {
-      status: 'pending',
-    };
+    const allowedStatuses = ['pending', 'approved', 'rejected', 'all'];
+    if (!allowedStatuses.includes(normalizedStatus)) {
+      throw new BadRequestError('Invalid status filter');
+    }
 
-    // Optional future: restrict HR-Admin to assigned employers
-    // const user = req.user;
-    // if (user.role === 'hr-admin') {
-    //   if (!user.employerIds || user.employerIds.length === 0) {
-    //     return res.status(200).json({ success: true, profiles: [], pagination: { ... } });
-    //   }
-    //   filter.employer = { $in: user.employerIds };
-    // }
+    const filter = {};
+    if (normalizedStatus === 'pending') {
+      filter.$or = [
+        { status: 'pending' },
+        { status: { $exists: false } },
+        { status: null },
+      ];
+    } else if (normalizedStatus !== 'all') {
+      filter.status = normalizedStatus;
+    }
+
+    const user = await User.findById(req.user.id).select('role employerIds');
+    if (!user) {
+      return res.status(401).json({ message: 'User not found' });
+    }
+
+    if (user.role === 'hr-admin') {
+      filter.employer = { $in: user.employerIds || [] };
+    }
 
     // Fetch pending company profiles
     const profiles = await CompanyProfile.find(filter)
       .populate('employer', 'name email')     // ref: 'User'
       .populate('createdBy', 'name email')    // ref: 'User'
+      .populate('industry', 'name')
+      .populate('functionalAreas', 'name')
       .sort({ createdAt: -1 })
       .skip((page - 1) * Number(limit))
       .limit(Number(limit))
       .select('-__v');
+    await ensureCompanyIdsForProfiles(profiles);
 
     // Total count for pagination
     const total = await CompanyProfile.countDocuments(filter);
@@ -1162,6 +1179,13 @@ employerController.approveCompanyProfile = async (req, res, next) => {
     const profile = await CompanyProfile.findById(id);
     if (!profile) {
       throw new NotFoundError('Company profile not found');
+    }
+
+    if (
+      req.user.role === 'hr-admin' &&
+      !(req.user.employerIds || []).some((employerId) => employerId.toString() === profile.employer?.toString())
+    ) {
+      throw new ForbiddenError('You can update only assigned company profiles');
     }
 
      // Fetch employer user from users table

@@ -93,6 +93,8 @@ const EMPLOYER_ACCESS_TAB_ALIASES = {
 const HR_ADMIN_ACCESS_TAB_ALIASES = {
   '/super-admin-dashboard/employer-plans': '/hr-admin-dashboard/employer-plans',
   '/super-admin-dashboard/payment-plans': '/hr-admin-dashboard/payment-plans',
+  '/hr-admin-dashboard/change-password': '/hr-admin-dashboard/settings',
+  '/hr-admin-dashboard/reports': '/hr-admin-dashboard/settings',
 };
 const normalizeHrAdminAccessTabs = (tabs = []) => {
   const allowedTabs = new Set(DEFAULT_HR_ADMIN_ACCESS_TABS);

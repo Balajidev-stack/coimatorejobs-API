@@ -71,7 +71,7 @@ employerRouter.get('/company-profile/get/:id', authenticate, authorize(['employe
 employerRouter.get('/company-profile/my-profiles', authenticate, authorize(['employer']), employerController.getCompanyProfilesForEmployer);
 
 // Give approval to company profile
-employerRouter.put( '/company-profile/approve/:id', authenticate, authorizeEmployerLike(),employerController.approveCompanyProfile);
+employerRouter.put('/company-profile/approve/:id', authenticate, authorize(['hr-admin', 'superadmin']), employerController.approveCompanyProfile);
 
 // List pending company profiles
 employerRouter.get('/company-profile/pending', authenticate, authorize(['hr-admin', 'superadmin']), employerController.getPendingCompanyProfiles);
