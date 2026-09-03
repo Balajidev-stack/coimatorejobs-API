@@ -1636,7 +1636,6 @@ hrAdminDashboardController.getEmployerActivityReport = async (req, res, next) =>
 
 hrAdminDashboardController.getEmployerActivityReport = async (req, res, next) => {
   try {
-    const user = req.user;
     const legacyMonths = req.query.months || 3;
     const rangeInput = req.query.period
       ? req.query
@@ -1648,10 +1647,8 @@ hrAdminDashboardController.getEmployerActivityReport = async (req, res, next) =>
     }
 
     const dateFilter = { $gte: startDate, $lte: endDate };
-    const scopedEmployerCondition =
-      user.role === 'hr-admin' ? { employer: { $in: user.employerIds || [] } } : {};
-    const scopedUserCondition =
-      user.role === 'hr-admin' ? { _id: { $in: user.employerIds || [] } } : {};
+    const scopedEmployerCondition = {};
+    const scopedUserCondition = {};
 
     const [
       newEmployers,
@@ -1659,10 +1656,12 @@ hrAdminDashboardController.getEmployerActivityReport = async (req, res, next) =>
       updatedCompanyProfiles,
       jobPosts,
       expiredJobPosts,
+      overallTotals,
     ] = await Promise.all([
       User.find({
         role: 'employer',
         isActive: true,
+        $or: [{ isDeleted: false }, { isDeleted: { $exists: false } }],
         createdAt: dateFilter,
         ...scopedUserCondition,
       }).select('name email contactEmail status isActive createdAt').lean(),
@@ -1676,12 +1675,11 @@ hrAdminDashboardController.getEmployerActivityReport = async (req, res, next) =>
         .lean(),
 
       CompanyProfile.find({
-        createdAt: { $lt: startDate },
         updatedAt: dateFilter,
         ...scopedEmployerCondition,
       })
         .populate('employer', 'name email contactEmail status')
-        .select('employer companyName email phone companyType industry status isVerified location updatedAt')
+        .select('employer companyName email phone companyType industry status isVerified location createdAt updatedAt')
         .lean(),
 
       JobPost.find({
@@ -1701,6 +1699,19 @@ hrAdminDashboardController.getEmployerActivityReport = async (req, res, next) =>
         .populate('companyProfile', 'companyName')
         .select('employer companyProfile title jobType industry location status applicationDeadline createdAt applicantCount')
         .lean(),
+
+      Promise.all([
+        JobPost.countDocuments({}),
+        User.countDocuments({
+          role: 'employer',
+          $or: [{ isDeleted: false }, { isDeleted: { $exists: false } }],
+        }),
+        CompanyProfile.countDocuments({}),
+      ]).then(([totalJobs, totalEmployers, totalCompanyProfiles]) => ({
+        totalJobs,
+        totalEmployers,
+        totalCompanyProfiles,
+      })),
     ]);
 
     const jobIds = jobPosts.map((job) => job._id);
@@ -1713,6 +1724,9 @@ hrAdminDashboardController.getEmployerActivityReport = async (req, res, next) =>
     const applicationCountMap = new Map(
       applicationCounts.map((row) => [String(row._id), Number(row.count || 0)])
     );
+    const updatedCompanyProfileRows = updatedCompanyProfiles.filter(
+      (profile) => profile.updatedAt && String(profile.updatedAt) !== String(profile.createdAt)
+    );
 
     const activeJobPosts = jobPosts.filter(
       (job) => job.status === 'Published' && new Date(job.applicationDeadline) >= new Date()
@@ -1724,7 +1738,7 @@ hrAdminDashboardController.getEmployerActivityReport = async (req, res, next) =>
       createdCompanyProfiles.map((profile) => String(profile.employer?._id || profile.employer)).filter(Boolean)
     );
     const uniqueCompanyUpdatedEmployers = new Set(
-      updatedCompanyProfiles.map((profile) => String(profile.employer?._id || profile.employer)).filter(Boolean)
+      updatedCompanyProfileRows.map((profile) => String(profile.employer?._id || profile.employer)).filter(Boolean)
     );
     const uniqueExpiredJobEmployers = new Set(
       expiredJobPosts.map((job) => String(job.employer?._id || job.employer)).filter(Boolean)
@@ -1788,11 +1802,18 @@ hrAdminDashboardController.getEmployerActivityReport = async (req, res, next) =>
     sheet.addRow(['To', formatReportDate(endDate)]);
     sheet.addRow([]);
 
+    sheet.addRow(['Overall DB Totals']);
+    addHeaderRow(['Metric', 'Total Count']);
+    sheet.addRow(['Total Jobs', overallTotals.totalJobs]);
+    sheet.addRow(['Total Employers', overallTotals.totalEmployers]);
+    sheet.addRow(['Total Company Profiles', overallTotals.totalCompanyProfiles]);
+    sheet.addRow([]);
+
     sheet.addRow(['Activity Summary']);
     addHeaderRow(['Activity', 'Employer Count', 'Total Actions']);
     sheet.addRow(['New Employer Registrations', newEmployers.length, newEmployers.length]);
     sheet.addRow(['Company Profiles Created', uniqueCompanyCreatedEmployers.size, createdCompanyProfiles.length]);
-    sheet.addRow(['Company Profiles Updated', uniqueCompanyUpdatedEmployers.size, `${updatedCompanyProfiles.length} Updates`]);
+    sheet.addRow(['Company Profiles Updated', uniqueCompanyUpdatedEmployers.size, `${updatedCompanyProfileRows.length} Updates`]);
     sheet.addRow(['Jobs Posted', uniqueJobPostingEmployers.size, `${jobPosts.length} Job Posts`]);
     sheet.addRow(['Expired Job Posts', uniqueExpiredJobEmployers.size, `${expiredJobPosts.length} Expired Jobs`]);
 
@@ -1828,7 +1849,7 @@ hrAdminDashboardController.getEmployerActivityReport = async (req, res, next) =>
 
     addSectionTitle('3. Company Profile Updates');
     addHeaderRow(['S.No', 'Employer Name', 'Company Name', 'Email', 'Updated Fields', 'Updated On']);
-    updatedCompanyProfiles.forEach((profile, index) => {
+    updatedCompanyProfileRows.forEach((profile, index) => {
       sheet.addRow([
         index + 1,
         getEmployerName(profile),
@@ -1838,7 +1859,7 @@ hrAdminDashboardController.getEmployerActivityReport = async (req, res, next) =>
         formatReportDate(profile.updatedAt),
       ]);
     });
-    addTotalRow('Total Updated Company Profiles :', updatedCompanyProfiles.length);
+    addTotalRow('Total Updated Company Profiles :', updatedCompanyProfileRows.length);
 
     addSectionTitle('4. Job Posts');
     addHeaderRow(['S.No', 'Employer Name', 'Company', 'Job Title', 'Job Type', 'Industry', 'Location', 'Posted Date', 'Expiry Date', 'Job Status', 'Applications']);
@@ -1912,37 +1933,67 @@ hrAdminDashboardController.getEmployerActivityReport = async (req, res, next) =>
   }
 };
 
+const IST_OFFSET_MINUTES = 330;
+
+const getIstDateParts = (value = new Date()) => {
+  const istDate = new Date(value.getTime() + IST_OFFSET_MINUTES * 60 * 1000);
+  return {
+    year: istDate.getUTCFullYear(),
+    month: istDate.getUTCMonth(),
+    day: istDate.getUTCDate(),
+  };
+};
+
+const createIstBoundaryDate = (year, month, day, hour = 0, minute = 0, second = 0, millisecond = 0) =>
+  new Date(Date.UTC(year, month, day, hour, minute, second, millisecond) - IST_OFFSET_MINUTES * 60 * 1000);
+
+const parseDateInputParts = (value) => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''));
+  if (!match) return null;
+  return {
+    year: Number(match[1]),
+    month: Number(match[2]) - 1,
+    day: Number(match[3]),
+  };
+};
+
 const parseCandidateActivityDateRange = ({ period = 'monthly', fromDate, toDate }) => {
   const now = new Date();
+  const istNow = getIstDateParts(now);
   let startDate = new Date(now);
   let endDate = new Date(now);
   let label = 'Current month';
   const normalizedPeriod = String(period || 'monthly').toLowerCase();
 
-  if (normalizedPeriod === 'daily') {
-    startDate.setHours(0, 0, 0, 0);
-    endDate.setHours(23, 59, 59, 999);
+  if (normalizedPeriod === 'all') {
+    startDate = new Date(0);
+    endDate = createIstBoundaryDate(istNow.year, istNow.month, istNow.day, 23, 59, 59, 999);
+    label = 'All time';
+  } else if (normalizedPeriod === 'daily') {
+    startDate = createIstBoundaryDate(istNow.year, istNow.month, istNow.day);
+    endDate = createIstBoundaryDate(istNow.year, istNow.month, istNow.day, 23, 59, 59, 999);
     label = 'Today';
   } else if (normalizedPeriod === 'monthly') {
-    startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-    endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    startDate = createIstBoundaryDate(istNow.year, istNow.month, 1);
+    endDate = createIstBoundaryDate(istNow.year, istNow.month + 1, 0, 23, 59, 59, 999);
     label = 'Current month';
   } else if (['3months', '6months', '12months'].includes(normalizedPeriod)) {
     const months = Number(normalizedPeriod.replace('months', ''));
-    startDate.setMonth(startDate.getMonth() - months);
-    startDate.setHours(0, 0, 0, 0);
-    endDate.setHours(23, 59, 59, 999);
+    startDate = createIstBoundaryDate(istNow.year, istNow.month - months, istNow.day);
+    endDate = createIstBoundaryDate(istNow.year, istNow.month, istNow.day, 23, 59, 59, 999);
     label = `Last ${months} months`;
   } else if (normalizedPeriod === 'custom') {
-    if (!fromDate || !toDate) {
+    const fromParts = parseDateInputParts(fromDate);
+    const toParts = parseDateInputParts(toDate);
+    if (!fromParts || !toParts) {
       return { error: 'fromDate and toDate are required for custom period' };
     }
 
-    startDate = new Date(`${fromDate}T00:00:00.000`);
-    endDate = new Date(`${toDate}T23:59:59.999`);
+    startDate = createIstBoundaryDate(fromParts.year, fromParts.month, fromParts.day);
+    endDate = createIstBoundaryDate(toParts.year, toParts.month, toParts.day, 23, 59, 59, 999);
     label = `${fromDate} to ${toDate}`;
   } else {
-    return { error: 'Invalid period. Use daily, monthly, 3months, 6months, 12months, or custom' };
+    return { error: 'Invalid period. Use all, daily, monthly, 3months, 6months, 12months, or custom' };
   }
 
   if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
@@ -1974,7 +2025,6 @@ const formatReportDate = (value) => {
  */
 hrAdminDashboardController.getHiringActivitiesReport = async (req, res, next) => {
   try {
-    const user = req.user;
     const { startDate, endDate, label, period, error } = parseCandidateActivityDateRange(req.query);
 
     if (error) {
@@ -1982,8 +2032,7 @@ hrAdminDashboardController.getHiringActivitiesReport = async (req, res, next) =>
     }
 
     const dateFilter = { $gte: startDate, $lte: endDate };
-    const scopedJobCondition =
-      user.role === 'hr-admin' ? { employer: { $in: user.employerIds || [] } } : {};
+    const scopedJobCondition = {};
 
     const jobs = await JobPost.find({
       ...scopedJobCondition,
@@ -2365,7 +2414,6 @@ hrAdminDashboardController.getCandidateActivityReport = async (req, res, next) =
     ] = await Promise.all([
       User.find({
         role: 'candidate',
-        isActive: true,
         createdAt: dateFilter,
       }).select('name email status isActive createdAt').lean(),
 
@@ -2380,11 +2428,10 @@ hrAdminDashboardController.getCandidateActivityReport = async (req, res, next) =
         .lean(),
 
       CandidateProfile.find({
-        createdAt: { $lt: startDate },
         updatedAt: dateFilter,
       })
         .populate('candidate', 'name email status')
-        .select('candidate fullName email phone jobTitle status resume experience location updatedAt')
+        .select('candidate fullName email phone jobTitle status resume experience location createdAt updatedAt')
         .lean(),
 
       Application.find({
@@ -2414,6 +2461,9 @@ hrAdminDashboardController.getCandidateActivityReport = async (req, res, next) =
         .select('candidate candidateProfile jobPost status updatedAt')
         .lean(),
     ]);
+    const updatedProfileRows = updatedProfiles.filter(
+      (profile) => profile.updatedAt && String(profile.updatedAt) !== String(profile.createdAt)
+    );
 
     const registrationProfileMap = new Map(
       (
@@ -2505,7 +2555,7 @@ hrAdminDashboardController.getCandidateActivityReport = async (req, res, next) =
     addHeaderRow(['Activity', 'Candidate Count', 'Total Actions']);
     sheet.addRow(['New Candidate Registrations', newCandidates.length, newCandidates.length]);
     sheet.addRow(['Candidate Profiles Created', createdProfiles.length, createdProfiles.length]);
-    sheet.addRow(['Candidate Profiles Updated', updatedProfiles.length, `${updatedProfiles.length} Updates`]);
+    sheet.addRow(['Candidate Profiles Updated', updatedProfileRows.length, `${updatedProfileRows.length} Updates`]);
     sheet.addRow(['Candidates Applied to Jobs', uniqueAppliedCandidates.size, `${applications.length} Applications`]);
     sheet.addRow(['Application Status Changed', uniqueStatusChangedCandidates.size, `${statusChangedApplications.length} Status Changes`]);
 
@@ -2546,7 +2596,7 @@ hrAdminDashboardController.getCandidateActivityReport = async (req, res, next) =
 
     addSectionTitle('3. Candidate Profile Updates');
     addHeaderRow(['S.No', 'Candidate Name', 'Email', 'Updated Fields', 'Updated On']);
-    updatedProfiles.forEach((profile, index) => {
+    updatedProfileRows.forEach((profile, index) => {
       sheet.addRow([
         index + 1,
         profile.fullName || profile.candidate?.name || 'N/A',
@@ -2555,7 +2605,7 @@ hrAdminDashboardController.getCandidateActivityReport = async (req, res, next) =
         formatReportDate(profile.updatedAt),
       ]);
     });
-    addTotalRow('Total Updated Profiles :', updatedProfiles.length);
+    addTotalRow('Total Updated Profiles :', updatedProfileRows.length);
 
     addSectionTitle('4. Job Applications');
     addHeaderRow(['S.No', 'Candidate Name', 'Email', 'Job Title', 'Company', 'Applied Date', 'Application Status']);
@@ -2629,31 +2679,37 @@ hrAdminDashboardController.getCandidateActivityReport = async (req, res, next) =
  */
 hrAdminDashboardController.getSkillsDemandReport = async (req, res, next) => {
   try {
-    const user = req.user;
     const { months = 6 } = req.query;
-    const monthsNum = parseInt(months, 10);
+    const normalizedMonths = String(months || 6).toLowerCase();
+    const isAllTime = normalizedMonths === 'all';
+    const monthsNum = isAllTime ? null : parseInt(months, 10);
 
-    if (isNaN(monthsNum) || monthsNum < 1 || monthsNum > 24) {
+    if (!isAllTime && (isNaN(monthsNum) || monthsNum < 1 || monthsNum > 24)) {
       return res.status(400).json({ success: false, message: 'Invalid months value' });
     }
     
-    const startDate = new Date();
-    startDate.setMonth(startDate.getMonth() - monthsNum);
+    const now = new Date();
+    const istNow = getIstDateParts(now);
+    const startDate = isAllTime
+      ? new Date(0)
+      : createIstBoundaryDate(istNow.year, istNow.month - monthsNum, istNow.day);
+    const endDate = createIstBoundaryDate(istNow.year, istNow.month, istNow.day, 23, 59, 59, 999);
+    const dateFilter = { $gte: startDate, $lte: endDate };
+    const reportRangeLabel = isAllTime
+      ? 'All time'
+      : `Last ${monthsNum} months (${startDate.toLocaleDateString('en-IN')} - ${endDate.toLocaleDateString('en-IN')})`;
     
     // Role-based filter for jobs
-    let jobFilter = {};
-    if (user.role === 'hr-admin') {
-      jobFilter = { employer: { $in: user.employerIds || [] } };
-    }
+    const jobFilter = {};
 
-    console.log("Fetching skills data for last", monthsNum, "months...");
+    console.log("Fetching skills data for", isAllTime ? "all time" : `last ${monthsNum} months`, "...");
 
     // GET SKILLS DEMAND (FROM JOBS - specialisms)
     const jobSkills = await JobPost.aggregate([
       {
         $match: {
           ...jobFilter,
-          createdAt: { $gte: startDate },
+          createdAt: dateFilter,
           specialisms: { $exists: true, $ne: [] }
         }
       },
@@ -2668,8 +2724,7 @@ hrAdminDashboardController.getSkillsDemandReport = async (req, res, next) => {
           avgApplicantCount: { $avg: '$applicantCount' }
         }
       },
-      { $sort: { demandCount: -1 } },
-      { $limit: 50 }
+      { $sort: { demandCount: -1 } }
     ]);
 
     console.log("Skills from job specialisms:", jobSkills.length);
@@ -2678,7 +2733,7 @@ hrAdminDashboardController.getSkillsDemandReport = async (req, res, next) => {
     const candidateResumeSkills = await CandidateResume.aggregate([
       {
         $match: {
-          createdAt: { $gte: startDate },
+          createdAt: dateFilter,
           skills: { $exists: true, $ne: [] }
         }
       },
@@ -2700,8 +2755,7 @@ hrAdminDashboardController.getSkillsDemandReport = async (req, res, next) => {
           }
         }
       },
-      { $sort: { supplyCount: -1 } },
-      { $limit: 50 }
+      { $sort: { supplyCount: -1 } }
     ]);
 
     console.log("Skills from candidate resumes:", candidateResumeSkills.length);
@@ -2813,8 +2867,7 @@ hrAdminDashboardController.getSkillsDemandReport = async (req, res, next) => {
         if (a.priority !== b.priority) return a.priority - b.priority;
         if (b.demand !== a.demand) return b.demand - a.demand;
         return Math.abs(b.gap) - Math.abs(a.gap);
-      })
-      .slice(0, 40); // Top 40 skills
+      });
 
     console.log("Final skills data count:", skillsData.length);
 
@@ -2833,7 +2886,7 @@ hrAdminDashboardController.getSkillsDemandReport = async (req, res, next) => {
     sheet.getCell('A1').alignment = { horizontal: 'center' };
     
     sheet.mergeCells('A2:D2');
-    sheet.getCell('A2').value = `Last ${monthsNum} months (${startDate.toLocaleDateString('en-IN')} - ${new Date().toLocaleDateString('en-IN')})`;
+    sheet.getCell('A2').value = reportRangeLabel;
     sheet.getCell('A2').font = { italic: true };
     sheet.getCell('A2').alignment = { horizontal: 'center' };
     
@@ -3019,7 +3072,8 @@ hrAdminDashboardController.getSkillsDemandReport = async (req, res, next) => {
     
     // Send file
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename=skills-demand-analysis-${monthsNum}-months.xlsx`);
+    const filenameSuffix = isAllTime ? 'all' : `${monthsNum}-months`;
+    res.setHeader('Content-Disposition', `attachment; filename=skills-demand-analysis-${filenameSuffix}.xlsx`);
     
     await workbook.xlsx.write(res);
     res.end();

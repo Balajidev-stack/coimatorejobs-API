@@ -140,6 +140,90 @@ const isRealEmail = (value = '') => {
   );
 };
 
+const shouldTreatAsSentenceBoundary = (input, index) => {
+  const char = input[index];
+  if (char === '!' || char === '?') return true;
+  if (char !== '.') return false;
+
+  const nextChar = input[index + 1];
+  if (!nextChar) return true;
+
+  return /\s/.test(nextChar) || nextChar === '<' || nextChar === '&' || /["')\]}]/.test(nextChar);
+};
+
+const copyUnchangedToken = (input, startIndex, result) => {
+  const remaining = input.slice(startIndex);
+  const protectedMatch = /^(https?:\/\/|www\.)[^\s<]+|^[^\s@<]+@[^\s@<]+\.[^\s@<]+/i.exec(remaining);
+
+  if (!protectedMatch) {
+    return { copied: false, result, nextIndex: startIndex };
+  }
+
+  return {
+    copied: true,
+    result: result + protectedMatch[0],
+    nextIndex: startIndex + protectedMatch[0].length - 1,
+  };
+};
+
+const normalizeJobDescriptionSentences = (value = '') => {
+  const input = String(value || '');
+  let result = '';
+  let shouldCapitalize = true;
+
+  for (let i = 0; i < input.length; i += 1) {
+    const char = input[i];
+
+    if (char === '<') {
+      const tagEndIndex = input.indexOf('>', i + 1);
+      if (tagEndIndex === -1) {
+        result += char;
+        continue;
+      }
+
+      const tag = input.slice(i, tagEndIndex + 1);
+      result += tag;
+      if (/^<\/?(p|div|li|br|h[1-6])\b/i.test(tag)) {
+        shouldCapitalize = true;
+      }
+      i = tagEndIndex;
+      continue;
+    }
+
+    if (char === '&') {
+      const entityEndIndex = input.indexOf(';', i + 1);
+      if (entityEndIndex !== -1 && entityEndIndex - i <= 12) {
+        result += input.slice(i, entityEndIndex + 1);
+        i = entityEndIndex;
+        continue;
+      }
+    }
+
+    if (shouldCapitalize) {
+      const protectedToken = copyUnchangedToken(input, i, result);
+      if (protectedToken.copied) {
+        result = protectedToken.result;
+        shouldCapitalize = false;
+        i = protectedToken.nextIndex;
+        continue;
+      }
+    }
+
+    if (/[A-Za-z]/.test(char)) {
+      result += shouldCapitalize ? char.toUpperCase() : char;
+      shouldCapitalize = false;
+      continue;
+    }
+
+    result += char;
+    if (shouldTreatAsSentenceBoundary(input, i)) {
+      shouldCapitalize = true;
+    }
+  }
+
+  return result;
+};
+
 const addRealEmail = (recipients, value) => {
   const email = normalizeEmail(value);
   if (isRealEmail(email)) recipients.add(email);
@@ -603,7 +687,7 @@ const buildBulkJobPayload = (row, companyProfileDoc, req) => {
 
   return {
     title: toSafeString(row.title),
-    description: toSafeString(row.description),
+    description: normalizeJobDescriptionSentences(toSafeString(row.description)),
     contactEmail: toSafeString(row.contactEmail) || companyProfileDoc.email,
     contactUsername: toSafeString(row.contactUsername),
     jobType: toSafeString(row.jobType) || 'Full-time',
@@ -703,7 +787,7 @@ const createJobPostFromPayload = async ({ payload, employerId, userRole, actorId
     postedBy: actorId,
     companyProfile,
     title,
-    description,
+    description: normalizeJobDescriptionSentences(description),
     contactEmail: normalizedContactEmail,
     contactUsername,
     jobType,
@@ -1443,6 +1527,8 @@ jobsController.getJobPosts = async (req, res, next) => {
     // Query and populate related company profile (only name and logo)
     const jobPosts = await JobPost.find(query)
       .populate('companyProfile', 'companyName logo email publicPhone phone')
+      .populate('employer', 'name role email')
+      .populate('postedBy', 'name role email')
       .populate('functionalAreas', 'name slug')
       .populate('industry', 'name slug')
       .populate('role', 'name slug defaultCollarCategory')
@@ -1843,6 +1929,10 @@ jobsController.updateJobPost = async (req, res, next) => {
      'applicationDeadline', 'remoteWork', 'status', 'maxApplicants', 'collarCategory'].forEach(field => {
       if (req.body[field] !== undefined) updateData[field] = req.body[field];
     });
+
+    if (Object.prototype.hasOwnProperty.call(updateData, 'description')) {
+      updateData.description = normalizeJobDescriptionSentences(updateData.description);
+    }
 
     // Structured salary update (independent of offeredSalary). Setting salary to
     // null/empty clears it; a valid object replaces it; omitting leaves it as-is.

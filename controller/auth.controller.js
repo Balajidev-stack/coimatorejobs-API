@@ -325,6 +325,56 @@ const getPublicEmployerEmail = (user) => {
   return email || DEFAULT_PUBLIC_EMPLOYER_EMAIL;
 };
 
+const attachCompanyProfileInfoToUsers = async (users = []) => {
+  const userObjects = users.map((user) => (
+    typeof user?.toObject === 'function' ? user.toObject() : { ...user }
+  ));
+
+  const getIdString = (value) => {
+    if (!value) return '';
+    return String(value._id || value);
+  };
+
+  const employerOwnerIds = [
+    ...new Set(
+      userObjects
+        .filter((user) => user.role === 'employer')
+        .map((user) => getIdString(user.parentEmployer) || getIdString(user._id))
+        .filter(Boolean)
+    ),
+  ];
+
+  const companyProfiles = employerOwnerIds.length
+    ? await CompanyProfile.find({ employer: { $in: employerOwnerIds } })
+        .select('_id employer companyName status')
+        .sort({ createdAt: -1 })
+        .lean()
+    : [];
+
+  const profileByEmployer = new Map();
+  companyProfiles.forEach((profile) => {
+    const employerId = getIdString(profile.employer);
+    if (!profileByEmployer.has(employerId)) {
+      profileByEmployer.set(employerId, profile);
+    }
+  });
+
+  return userObjects.map((user) => {
+    if (user.role !== 'employer') return user;
+
+    const ownerId = getIdString(user.parentEmployer) || getIdString(user._id);
+    const profile = profileByEmployer.get(ownerId);
+
+    return {
+      ...user,
+      companyProfileId: profile?._id || null,
+      companyProfileName: profile?.companyName || '',
+      companyProfileStatus: profile?.status || '',
+      hasCompanyProfile: Boolean(profile),
+    };
+  });
+};
+
 const getRegistrationAlertAdmins = async () => {
   const configuredEmail = String(SUPERADMIN_EMAIL || '').trim().toLowerCase();
   const admins = await User.find({
@@ -1054,8 +1104,8 @@ authentication.getAssignedUsers = async (req, res, next) => {
 
     await ensureEmployerIdsForUsers(users);
 
-    const sanitizedUsers = users.map((userDoc) => {
-      const userObj = userDoc.toObject();
+    const usersWithCompanyProfiles = await attachCompanyProfileInfoToUsers(users);
+    const sanitizedUsers = usersWithCompanyProfiles.map((userObj) => {
       if (userObj.role === 'employer') {
         userObj.email = getPublicEmployerEmail(userObj);
       }
@@ -2273,13 +2323,15 @@ authentication.getUsersByRole = async (req, res, next) => {
 
     await ensureEmployerIdsForUsers(users);
 
+    const usersWithCompanyProfiles = await attachCompanyProfileInfoToUsers(users);
+
     res.status(200).json({
       success: true,
       page: pageNumber,
       limit: limitNumber,
       totalPages: Math.ceil(totalCount / limitNumber),
       totalCount,
-      data: users
+      data: usersWithCompanyProfiles
     });
   } catch (error) {
     console.error('Error in getUsersByRole:', error);
