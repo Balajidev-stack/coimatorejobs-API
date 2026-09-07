@@ -166,8 +166,112 @@ const copyUnchangedToken = (input, startIndex, result) => {
   };
 };
 
-const normalizeJobDescriptionSentences = (value = '') => {
+const htmlEntityMap = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  nbsp: ' ',
+};
+
+const decodeHtmlEntities = (value = '') =>
+  String(value || '').replace(/&(#(\d+)|#x([\da-f]+)|[a-z]+);/gi, (match, entity, decimal, hex) => {
+    if (decimal) return String.fromCodePoint(Number(decimal));
+    if (hex) return String.fromCodePoint(parseInt(hex, 16));
+    return htmlEntityMap[entity.toLowerCase()] ?? match;
+  });
+
+const stripHtmlToText = (value = '') =>
+  String(value || '')
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<\/?(p|div|section|article|header|footer|h[1-6]|tr|table|ul|ol)\b[^>]*>/gi, '\n')
+    .replace(/<li\b[^>]*>/gi, '\n- ')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, '');
+
+const escapeHtml = (value = '') =>
+  String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const plainTextToHtml = (value = '') =>
+  normalizeJobDescriptionText(value)
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.replace(/\n/g, '<br>'))
+    .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/&lt;br&gt;/g, '<br>')}</p>`)
+    .join('');
+
+const getSafeQuillClassAttribute = (attrs = '') => {
+  const classMatch = /\sclass=(["'])(.*?)\1/i.exec(attrs);
+  if (!classMatch) return '';
+
+  const safeClasses = classMatch[2]
+    .split(/\s+/)
+    .filter((className) =>
+      /^ql-align-(center|right|justify)$/i.test(className)
+    );
+
+  return safeClasses.length ? ` class="${safeClasses.join(' ')}"` : '';
+};
+
+const normalizeJobDescriptionText = (value = '') => {
   const input = String(value || '');
+  const withoutHtml = /<\/?[a-z][\s\S]*>/i.test(input) ? stripHtmlToText(input) : input;
+
+  return decodeHtmlEntities(withoutHtml)
+    .normalize('NFKC')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .replace(/\u00A0/g, ' ')
+    .replace(/[ \t\f\v]+/g, ' ')
+    .replace(/ *\n+ */g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .split('\n')
+    .map((line) => line.trim())
+    .join('\n')
+    .trim();
+};
+
+const sanitizeJobDescriptionHtml = (value = '') => {
+  const rawInput = String(value || '').trim();
+  const input = /&lt;\/?(p|h[1-6]|ul|ol|li|strong|em|span|div|br|a)\b/i.test(rawInput)
+    ? decodeHtmlEntities(rawInput)
+    : rawInput;
+  if (!input) return '';
+  if (!/<\/?[a-z][\s\S]*>/i.test(input)) return plainTextToHtml(input);
+
+  return input
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<\/?h[4-6]\b[^>]*>/gi, (tag) => (tag.startsWith('</') ? '</p>' : '<p>'))
+    .replace(/<span\b([^>]*)>/gi, (_match, attrs) => `<span${getSafeQuillClassAttribute(attrs)}>`)
+    .replace(/<div\b([^>]*)>/gi, (_match, attrs) => `<p${getSafeQuillClassAttribute(attrs)}>`)
+    .replace(/<\/div>/gi, '</p>')
+    .replace(/<b\b[^>]*>/gi, '<strong>')
+    .replace(/<\/b>/gi, '</strong>')
+    .replace(/<i\b[^>]*>/gi, '<em>')
+    .replace(/<\/i>/gi, '</em>')
+    .replace(/<a\b[^>]*href=(["'])(.*?)\1[^>]*>/gi, (_match, _quote, href) => {
+      const safeHref = /^(https?:\/\/|mailto:|tel:|\/)/i.test(href) ? href : '#';
+      return `<a href="${escapeHtml(safeHref)}" target="_blank" rel="noopener noreferrer">`;
+    })
+    .replace(/<a\b[^>]*>/gi, '<a href="#">')
+    .replace(/<br\b[^>]*\/?>/gi, '<br>')
+    .replace(/<(p|ul|ol|li|strong|em|u|s|h[1-3])\b([^>]*)>/gi, (_match, tag, attrs) => `<${tag.toLowerCase()}${getSafeQuillClassAttribute(attrs)}>`)
+    .replace(/<\/(p|ul|ol|li|strong|em|u|s|h[1-3]|span)>/gi, (_match, tag) => `</${tag.toLowerCase()}>`)
+    .replace(/<(?!\/?a\b|br\b|\/?(p|ul|ol|li|strong|em|u|s|h[1-3]|span)\b)[^>]+>/gi, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/[ \t\f\v]+/g, ' ')
+    .replace(/>\s+</g, '><')
+    .trim();
+};
+
+const normalizeJobDescriptionSentences = (value = '') => {
+  const input = normalizeJobDescriptionText(value);
   let result = '';
   let shouldCapitalize = true;
 
@@ -787,7 +891,7 @@ const createJobPostFromPayload = async ({ payload, employerId, userRole, actorId
     postedBy: actorId,
     companyProfile,
     title,
-    description: normalizeJobDescriptionSentences(description),
+    description: sanitizeJobDescriptionHtml(description),
     contactEmail: normalizedContactEmail,
     contactUsername,
     jobType,
@@ -1826,6 +1930,13 @@ jobsController.getJobPost = async (req, res, next) => {
       'updatedAt',
     ].join(' ');
 
+    const PRIVATE_JOB_FIELDS = [
+      'employer',
+      'postedBy',
+      'contactEmail',
+      'contactUsername',
+    ].join(' ');
+
     const jobPost = await JobPost.findOne(query)
       .populate({
         path: 'companyProfile',
@@ -1836,7 +1947,7 @@ jobsController.getJobPost = async (req, res, next) => {
       .populate('industry', 'name slug')
       .populate('role', 'name slug defaultCollarCategory')
       .populate('skills', 'name')
-      .select(PUBLIC_JOB_FIELDS);
+      .select(`${PUBLIC_JOB_FIELDS} ${PRIVATE_JOB_FIELDS}`);
 
     if (!jobPost) {
       throw new NotFoundError('Job post not found');
@@ -1849,6 +1960,21 @@ jobsController.getJobPost = async (req, res, next) => {
     // }
 
     const jobPostData = applyCurrentRoleCollarCategory(jobPost);
+    const canViewPrivateFields = Boolean(
+      user &&
+      (
+        ['hr-admin', 'superadmin'].includes(user.role) ||
+        String(jobPostData.employer || '') === String(user.id || '') ||
+        String(jobPostData.postedBy || '') === String(user.id || '')
+      )
+    );
+
+    if (!canViewPrivateFields) {
+      delete jobPostData.contactEmail;
+      delete jobPostData.contactUsername;
+    }
+    delete jobPostData.employer;
+    delete jobPostData.postedBy;
 
     return res.status(200).json({
       success: true,
@@ -1931,7 +2057,7 @@ jobsController.updateJobPost = async (req, res, next) => {
     });
 
     if (Object.prototype.hasOwnProperty.call(updateData, 'description')) {
-      updateData.description = normalizeJobDescriptionSentences(updateData.description);
+      updateData.description = sanitizeJobDescriptionHtml(updateData.description);
     }
 
     // Structured salary update (independent of offeredSalary). Setting salary to
