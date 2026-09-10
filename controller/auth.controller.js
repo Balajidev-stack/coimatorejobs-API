@@ -22,6 +22,7 @@ import { sendPasswordResetEmail, sendWelcomeEmail, sendSuperadminAlertEmail, sen
 import { BadRequestError, ForbiddenError,NotFoundError} from '../utils/errors.js';
 import { isValidEmailAddress, normalizeEmail } from "../utils/emailValidation.js";
 import { createNotification, notificationPresets } from "../utils/notificationHelper.js";
+import { isPubliclyIndexable, notifyJobWithdrawal } from "../utils/googleIndexing.js";
 
 import { log } from "console";
 
@@ -1681,12 +1682,21 @@ authentication.deleteUserProfile = async (req, res, next) => {
       role: targetUser.role
     };
 
+    // slug/status/applicationDeadline are the only extra fields loaded: exactly
+    // what the Google Indexing withdrawal below needs, and no job content.
     const jobPosts = await JobPost.find({
       $or: [{ employer: targetUserId }, { postedBy: targetUserId }],
     })
-      .select('_id')
+      .select('_id slug status applicationDeadline')
       .session(session);
     const jobIds = jobPosts.map((job) => job._id);
+
+    // Jobs are removed only for employer accounts (employerDeleteOps below).
+    // Capture each job's public state now, while the documents still exist;
+    // Google is told only after the transaction has committed.
+    const jobWithdrawals = targetUser.role === 'employer'
+      ? jobPosts.map((job) => ({ job, wasPubliclyIndexable: isPubliclyIndexable(job) }))
+      : [];
 
     const candidateProfiles = await CandidateProfile.find({ candidate: targetUserId })
       .select('_id')
@@ -1761,6 +1771,13 @@ authentication.deleteUserProfile = async (req, res, next) => {
 
     await session.commitTransaction();
     session.endSession();
+
+    // The jobs are now durably gone: withdraw the ones Google may hold. Nothing
+    // is sent if any delete or the commit failed (that path throws to the catch
+    // below). Fire-and-forget, so account deletion never waits on Google.
+    for (const { job, wasPubliclyIndexable } of jobWithdrawals) {
+      notifyJobWithdrawal(job, 'account-delete', { wasPubliclyIndexable });
+    }
 
     // Send deletion confirmation email to user
     await sendProfileDeletionEmail({

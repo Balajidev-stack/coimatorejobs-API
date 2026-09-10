@@ -37,6 +37,11 @@ import {
   buildAppliedFilters,
 } from '../utils/jobQueryFilter.js';
 import { resolveJobQueryTaxonomy } from '../utils/jobTaxonomyResolver.js';
+import {
+  isPubliclyIndexable,
+  notifyJobPublished,
+  notifyJobWithdrawal,
+} from '../utils/googleIndexing.js';
 
 const candidateController = {};
 const CANDIDATE_ID_PREFIX = "CND";
@@ -1328,15 +1333,26 @@ candidateController.applyToJob = async (req, res, next) => {
       //   jobPost.status = 'Closed';
       // }
       // NEW AUTO CLOSE LOGIC: Close if applicant count reaches maxApplicants
+      // Public state is captured BEFORE the status flips, so the closure can be
+      // withdrawn from Google once the save has succeeded.
+      const wasPubliclyIndexable = isPubliclyIndexable(jobPost);
+      let autoClosed = false;
       if (jobPost.maxApplicants && jobPost.applicantCount >= jobPost.maxApplicants) {
         jobPost.status = 'Closed';
         jobPost.closedAt = new Date();
         jobPost.closedBy = null;
         jobPost.closedByRole = 'system';
+        autoClosed = true;
       }
 
       // SAVE THE JOB POST 
       await jobPost.save();
+
+    // The applicant limit just closed a live job: withdraw its page from Google.
+    // Fire-and-forget, so indexing can never delay or fail the application.
+    if (autoClosed) {
+      notifyJobWithdrawal(jobPost, 'auto-close', { wasPubliclyIndexable });
+    }
 
     // Send email to superadmin + hr-admin recipients
     const recipients = await getAdminAlertRecipients();
@@ -1716,6 +1732,7 @@ candidateController.deleteAppliedJob = async (req, res, next) => {
       job.positions.remaining += 1;
 
       // reopen job if it was closed
+      let reopened = false;
       if (job.status === 'Closed') {
         job.status = 'Published';
         job.closedAt = null;
@@ -1724,9 +1741,17 @@ candidateController.deleteAppliedJob = async (req, res, next) => {
         job.candidateSelectionSource = 'unknown';
         job.candidateSelectionSourceUpdatedAt = null;
         job.candidateSelectionSourceUpdatedBy = null;
+        reopened = true;
       }
 
       await job.save();
+
+      // The page is public again: tell Google. notifyJobPublished() re-checks
+      // eligibility, so a reopened job that is past its deadline (or has no
+      // slug) is not announced. Fire-and-forget.
+      if (reopened) {
+        notifyJobPublished(job, 'auto-reopen');
+      }
     }
 
     return res.status(200).json({

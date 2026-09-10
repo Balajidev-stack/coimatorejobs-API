@@ -16,6 +16,7 @@ import candidateRouter from './routes/candidate.routes.js';
 import jobAlertRouter from './routes/jobAlert.routes.js';
 import masterRoutes from './routes/master.routes.js';
 import pushNotificationRouter from './routes/pushNotification.routes.js';
+import indexingRouter from './routes/indexing.routes.js';
 
 import { sendPasswordResetEmail, sendWelcomeEmail, sendSuperadminAlertEmail } from './utils/mailer.js';
 
@@ -114,6 +115,7 @@ app.use('/api/v1/candidate-dashboard', candidateRouter);
 app.use('/api/v1/notification', jobAlertRouter);
 app.use('/api/v1/push-notifications', pushNotificationRouter);
 app.use('/api/v1/master', masterRoutes);
+app.use('/api/v1/indexing', indexingRouter);
 
 
 // Health check

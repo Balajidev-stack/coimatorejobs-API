@@ -20,6 +20,11 @@
 //   --apply     perform writes (omit for dry run)
 //   --verbose   print every job's old -> new mapping (dry run prints changes
 //               only by default)
+//   --notify-google
+//               with --apply only: report each rewritten job to the Google
+//               Indexing API (URL_UPDATED for the new URL when the job is live;
+//               URL_DELETED for an old URL that will now 404). Off by default
+//               because a large migration can exceed the 200/day quota.
 //
 // Determinism: jobs are processed oldest-first, so duplicate suffixes (-2, -3)
 // are assigned by creation order and stay stable across re-runs.
@@ -29,10 +34,21 @@ import connectToDatabase from '../database/mongodb.js';
 import JobPost from '../models/jobs.model.js';
 import CompanyProfile from '../models/companyProfile.model.js';
 import { buildJobSlugBase, buildUniqueJobSlug } from '../utils/jobSlug.js';
+import {
+  buildCanonicalJobUrl,
+  isPubliclyIndexable,
+  submitUrlDeleted,
+  submitUrlUpdated,
+} from '../utils/googleIndexing.js';
 
 const args = process.argv.slice(2);
 const APPLY = args.includes('--apply');
 const VERBOSE = args.includes('--verbose');
+const NOTIFY_GOOGLE = args.includes('--notify-google');
+
+// Legacy "title-city-<ObjectId>" slugs. The frontend resolves the embedded id
+// and 308-redirects to the canonical URL, so those old URLs keep working.
+const OBJECT_ID_SUFFIX = /(?:^|-)[a-f0-9]{24}$/i;
 
 const line = (char = '-') => console.log(char.repeat(78));
 
@@ -47,7 +63,7 @@ const migrateJobSlugs = async () => {
 
   // Oldest first so uniqueness suffixes are assigned deterministically.
   const jobs = await JobPost.find({})
-    .select('_id title slug location companyProfile status createdAt')
+    .select('_id title slug location companyProfile status applicationDeadline createdAt')
     .sort({ createdAt: 1 })
     .lean();
 
@@ -111,6 +127,7 @@ const migrateJobSlugs = async () => {
       id: String(job._id),
       title: job.title,
       status: job.status,
+      applicationDeadline: job.applicationDeadline,
       oldSlug: job.slug || null,
       newSlug,
       changed: job.slug !== newSlug,
@@ -171,11 +188,57 @@ const migrateJobSlugs = async () => {
         // here. $set writes the slug directly and touches nothing else.
         await JobPost.updateOne({ _id: entry.id }, { $set: { slug: entry.newSlug } });
         written += 1;
+        entry.written = true;
       } catch (err) {
         failed += 1;
         console.error(`  FAILED ${entry.id}: ${err.message}`);
       }
     }
+  }
+
+  // ---------------- GOOGLE INDEXING (opt-in) ----------------
+  // Slugs are otherwise immutable, so this script is the only place a public
+  // job URL changes. With --apply --notify-google each rewritten job is
+  // reported through the existing indexing service:
+  //   * new URL -> URL_UPDATED, when the job is a live public page
+  //   * old URL -> URL_DELETED, when the job was Published and the old slug
+  //                now 404s. Legacy "title-city-<ObjectId>" slugs still
+  //                resolve and 308-redirect to the new URL, so they are left
+  //                for Google to follow rather than withdrawn.
+  // Sequential and awaited, so audit rows are written before the process exits.
+  const google = { updated: 0, deleted: 0, failed: 0, skipped: 0 };
+
+  if (APPLY && NOTIFY_GOOGLE) {
+    const rewritten = changes.filter((entry) => entry.written);
+    const tally = (result, bucket) => {
+      if (result.status === 'success') google[bucket] += 1;
+      else if (result.status === 'failed') google.failed += 1;
+      else google.skipped += 1;
+    };
+
+    line();
+    console.log(`GOOGLE INDEXING — ${rewritten.length} rewritten job(s)`);
+    line();
+
+    for (const entry of rewritten) {
+      const options = { jobPost: entry.id, source: 'slug-migration' };
+
+      if (entry.oldSlug && entry.status === 'Published' && !OBJECT_ID_SUFFIX.test(entry.oldSlug)) {
+        tally(await submitUrlDeleted(buildCanonicalJobUrl({ slug: entry.oldSlug }), options), 'deleted');
+      }
+
+      const migratedJob = {
+        _id: entry.id,
+        slug: entry.newSlug,
+        status: entry.status,
+        applicationDeadline: entry.applicationDeadline,
+      };
+      if (isPubliclyIndexable(migratedJob)) {
+        tally(await submitUrlUpdated(buildCanonicalJobUrl(migratedJob), options), 'updated');
+      }
+    }
+  } else if (NOTIFY_GOOGLE) {
+    console.log('\n--notify-google ignored: dry run (re-run with --apply --notify-google)');
   }
 
   // ---------------- SUMMARY REPORT ----------------

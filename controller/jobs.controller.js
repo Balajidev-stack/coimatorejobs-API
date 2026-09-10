@@ -17,6 +17,11 @@ import { isValidEmailAddress, normalizeEmail } from "../utils/emailValidation.js
 import { COLLAR_CATEGORIES } from '../models/jobs.model.js';
 import { buildPublicJobPath, buildPublicJobUrl } from '../utils/jobSlug.js';
 import {
+  isPubliclyIndexable,
+  notifyJobPublished,
+  notifyJobWithdrawal,
+} from '../utils/googleIndexing.js';
+import {
   getEmployerResumeDownloadUsage,
   getFeatureLimit,
   requireEmployerJobPostLimit,
@@ -496,6 +501,18 @@ jobsController.createJobPost = async (req, res, next) => {
       throw new BadRequestError(`Missing required fields: ${missingFields.join(', ')}`);
     }
 
+    // Respect the requested lifecycle status (the post-job forms offer Draft /
+    // Published / Closed); omitting it keeps the historical default, Published.
+    // Validated here, before taxonomy resolution, which can create master records.
+    const allowedStatuses = JobPost.schema.path('status').enumValues;
+    const requestedStatus =
+      req.body.status === undefined || req.body.status === null || req.body.status === ''
+        ? 'Published'
+        : String(req.body.status);
+    if (!allowedStatuses.includes(requestedStatus)) {
+      throw new BadRequestError(`status must be one of: ${allowedStatuses.join(', ')}`);
+    }
+
     const normalizedContactEmail = normalizeEmail(contactEmail);
     if (!isValidEmailAddress(normalizedContactEmail)) {
       throw new BadRequestError('Please enter a valid contact email address');
@@ -600,7 +617,14 @@ jobsController.createJobPost = async (req, res, next) => {
         remaining: Number(positions.total),
       },
       remoteWork: remoteWork || 'On-site', // Default to On-site
-      status: 'Published', // Default to Published
+      status: requestedStatus, // Validated above; defaults to Published
+      ...(requestedStatus === 'Closed'
+        ? {
+            closedAt: new Date(),
+            closedBy: req.user.id,
+            closedByRole: ['employer', 'hr-admin', 'superadmin'].includes(userRole) ? userRole : 'system',
+          }
+        : {}),
     });
 
     await newJobPost.save();
@@ -610,6 +634,12 @@ jobsController.createJobPost = async (req, res, next) => {
     // straight to the live job rather than to a dashboard listing.
     const publicJobPath = buildPublicJobPath(newJobPost);
     const publicJobUrl = buildPublicJobUrl(newJobPost, process.env.FRONTEND_URL);
+
+    // Tell Google about the new JobPosting page. Fire-and-forget by design:
+    // notifyJobPublished() never throws and never awaits the round trip, so a
+    // slow or unavailable Indexing API cannot delay or fail job creation. It
+    // self-skips when the job is not a live public page.
+    notifyJobPublished(newJobPost, 'create');
     const populatedJobForEmail = await JobPost.findById(newJobPost._id)
       .populate('functionalAreas', 'name')
       .populate('industry', 'name')
@@ -1423,6 +1453,11 @@ jobsController.updateJobPost = async (req, res, next) => {
     }
     
 
+    // Whether this job was a live public JobPosting page BEFORE the edit. Read
+    // from the pre-update document so a Published -> Closed transition can be
+    // detected below and withdrawn from Google.
+    const wasPubliclyIndexable = isPubliclyIndexable(jobPost);
+
     // Update job post
     const updatedJobPost = await JobPost.findByIdAndUpdate(
       jobPostId,
@@ -1430,6 +1465,19 @@ jobsController.updateJobPost = async (req, res, next) => {
       { new: true, runValidators: true }
     ).populate('functionalAreas role industry skills companyProfile').select('-__v -applicantCount');
     await ensureJobId(updatedJobPost);
+
+    // Keep Google in step with the page's public state. Still live -> refresh
+    // it; no longer live (Closed, moved to Draft, or deadline pulled into the
+    // past) -> withdraw it. Both calls are fire-and-forget and cannot fail the
+    // update request.
+    if (isPubliclyIndexable(updatedJobPost)) {
+      notifyJobPublished(updatedJobPost, 'update');
+    } else {
+      // Judged from the PRE-update document. A job that was Published but
+      // already past its deadline was not indexable a moment ago, yet Google
+      // may still hold it if the expiry sweep has not withdrawn it yet.
+      notifyJobWithdrawal(jobPost, 'update', { wasPubliclyIndexable });
+    }
 
     return res.status(200).json({
       success: true,
@@ -1470,8 +1518,17 @@ jobsController.deleteJobPost = async (req, res, next) => {
       throw new ForbiddenError('You do not have permission to modify this job post');
     }
 
+    // Capture the public state before the document disappears — after the
+    // delete there is no slug left to build a canonical URL from.
+    const wasPubliclyIndexable = isPubliclyIndexable(jobPost);
+
     // Delete job post
     await JobPost.findByIdAndDelete(jobPostId);
+
+    // Withdraw the page from Google. Covers jobs that were live a moment ago
+    // and Published jobs already past their deadline that the expiry sweep has
+    // not withdrawn yet; a Draft that was never announced is left alone.
+    notifyJobWithdrawal(jobPost, 'delete', { wasPubliclyIndexable });
 
     return res.status(200).json({
       success: true,
