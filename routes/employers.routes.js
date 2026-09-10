@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import multer from 'multer';
 import employerController from '../controller/employer.controller.js';
 import employerApplicantsController from '../controller/employerApplicants.controller.js';
 import resumeAlertController from '../controller/resumeAlert.controller.js';
@@ -19,6 +20,23 @@ import trackView from '../middleware/trackView.js';
 import trackJobView from '../middleware/trackJobView.js';
 
 const employerRouter = Router();
+const bulkJobUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = new Set([
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'text/csv',
+      'application/csv',
+    ]);
+    const originalName = String(file.originalname || '').toLowerCase();
+    if (allowedTypes.has(String(file.mimetype || '').toLowerCase()) || /\.(xlsx|csv)$/.test(originalName)) {
+      cb(null, true);
+      return;
+    }
+    cb(new Error('Only .xlsx or .csv files are allowed'));
+  },
+});
 
 employerRouter.get('/active-payment-plans', paymentPlanController.getActivePaymentPlans);
 employerRouter.get('/my-payment-plan', authenticate, authorize(['employer']), paymentPlanController.getMyPaymentPlan);
@@ -28,14 +46,14 @@ employerRouter.delete('/my-plan-history/:transactionId', authenticate, authorize
 employerRouter.post('/payment-plans/:id/razorpay-order', authenticate, authorize(['employer']), paymentPlanController.createPaymentOrder);
 employerRouter.post('/payment-plans/razorpay-verify', authenticate, authorize(['employer']), paymentPlanController.verifyPayment);
 employerRouter.post('/payment-plans/razorpay-failed', authenticate, authorize(['employer']), paymentPlanController.markPaymentFailed);
-employerRouter.get('/payment-plans', authenticate, authorize(['superadmin']), paymentPlanController.getPaymentPlans);
-employerRouter.get('/payment-plan-employers', authenticate, authorize(['superadmin']), paymentPlanController.getEmployerPlanOverview);
-employerRouter.patch('/payment-plan-employers/:employerId/remove-plan', authenticate, authorize(['superadmin']), paymentPlanController.removeEmployerPaymentPlan);
-employerRouter.get('/payment-plan-employers/:employerId/usage', authenticate, authorize(['superadmin']), paymentPlanController.getEmployerPlanUsage);
-employerRouter.post('/payment-plans', authenticate, authorize(['superadmin']), paymentPlanController.createPaymentPlan);
-employerRouter.put('/payment-plans/:id', authenticate, authorize(['superadmin']), paymentPlanController.updatePaymentPlan);
-employerRouter.patch('/payment-plans/:id/status', authenticate, authorize(['superadmin']), paymentPlanController.updatePaymentPlanStatus);
-employerRouter.delete('/payment-plans/:id', authenticate, authorize(['superadmin']), paymentPlanController.deletePaymentPlan);
+employerRouter.get('/payment-plans', authenticate, authorize(['superadmin', 'hr-admin']), paymentPlanController.getPaymentPlans);
+employerRouter.get('/payment-plan-employers', authenticate, authorize(['superadmin', 'hr-admin']), paymentPlanController.getEmployerPlanOverview);
+employerRouter.patch('/payment-plan-employers/:employerId/remove-plan', authenticate, authorize(['superadmin', 'hr-admin']), paymentPlanController.removeEmployerPaymentPlan);
+employerRouter.get('/payment-plan-employers/:employerId/usage', authenticate, authorize(['superadmin', 'hr-admin']), paymentPlanController.getEmployerPlanUsage);
+employerRouter.post('/payment-plans', authenticate, authorize(['superadmin', 'hr-admin']), paymentPlanController.createPaymentPlan);
+employerRouter.put('/payment-plans/:id', authenticate, authorize(['superadmin', 'hr-admin']), paymentPlanController.updatePaymentPlan);
+employerRouter.patch('/payment-plans/:id/status', authenticate, authorize(['superadmin', 'hr-admin']), paymentPlanController.updatePaymentPlanStatus);
+employerRouter.delete('/payment-plans/:id', authenticate, authorize(['superadmin', 'hr-admin']), paymentPlanController.deletePaymentPlan);
 
 
 // Route to get all company profiles (accessible to admins and superadmins)
@@ -53,7 +71,7 @@ employerRouter.get('/company-profile/get/:id', authenticate, authorize(['employe
 employerRouter.get('/company-profile/my-profiles', authenticate, authorize(['employer']), employerController.getCompanyProfilesForEmployer);
 
 // Give approval to company profile
-employerRouter.put( '/company-profile/approve/:id', authenticate, authorizeEmployerLike(),employerController.approveCompanyProfile);
+employerRouter.put('/company-profile/approve/:id', authenticate, authorize(['hr-admin', 'superadmin']), employerController.approveCompanyProfile);
 
 // List pending company profiles
 employerRouter.get('/company-profile/pending', authenticate, authorize(['hr-admin', 'superadmin']), employerController.getPendingCompanyProfiles);
@@ -76,6 +94,8 @@ employerRouter.patch('/demand-candidates/:id/status', authenticate, authorize(['
 
 // Route to create a job post (accessible to employers, admins, and superadmins)
 employerRouter.post('/jobs/create', authenticate, authorizeEmployerLike(), companyUpload, normalizeBody, jobsController.createJobPost);  //we have added companyUpload to handle file uploads for job posts and normalizeBody to handle FormData parsing
+employerRouter.get('/jobs/bulk-upload-template', authenticate, authorizeEmployerLike(), jobsController.downloadBulkJobTemplate);
+employerRouter.post('/jobs/bulk-upload', authenticate, authorizeEmployerLike(), bulkJobUpload.single('file'), jobsController.bulkUploadJobPosts);
 
 // Get all job posts (filtered by employer for non-superadmins)
 employerRouter.get('/jobs/fetch-all', authenticate, authorize(['employer', 'hr-admin', 'superadmin', 'candidate']),jobsController.getJobPosts);
@@ -91,6 +111,9 @@ employerRouter.get('/jobs/fetch/:id', optionalAuthenticate, trackJobView, jobsCo
 // Update a job post
 employerRouter.put('/jobs/update/:id',authenticate, authorizeEmployerLike(), companyUpload, normalizeBody, jobsController.updateJobPost);
 
+// Employer accepts or ignores a job posted by Cbejobs/admin on their behalf
+employerRouter.patch('/jobs/:id/approval-response', authenticate, authorize(['employer']), jobsController.respondToAdminPostedJob);
+
 // Delete a job post
 employerRouter.delete('/jobs/delete/:id',authenticate, authorizeEmployerLike(),jobsController.deleteJobPost);
 
@@ -105,6 +128,9 @@ employerRouter.get('/jobs/by-admins', authenticate, authorize(['hr-admin', 'supe
 
 
 // Get applicants for a specific job post
+
+// Admin releases currently pending applicants for a job to the employer
+employerRouter.put('/applicants/release/:jobId', authenticate, authorize(['hr-admin', 'superadmin']), employerApplicantsController.releaseJobApplicantsToEmployer);
 
 // Get all applicants for a specific job with filters
 employerRouter.get('/applicants/:jobId', authenticate, authorizeEmployerLike(), employerApplicantsController.getApplicantsByJob);

@@ -36,6 +36,20 @@ authRouter.put('/admin/reset-user-password/:id', authentication.adminResetUserPa
 // Get users by role (hr-admin and superadmin only)
 authRouter.get('/users',authenticate, authorize(['hr-admin', 'superadmin']), authentication.getUsersByRole);
 
+// HR-admin display role labels (superadmin only)
+authRouter.get('/admin/hr-admin-roles', authenticate, authorize(['superadmin']), authentication.getHrAdminRoles);
+authRouter.post('/admin/hr-admin-roles', authenticate, authorize(['superadmin']), authentication.createHrAdminRole);
+authRouter.delete('/admin/hr-admin-roles/:id', authenticate, authorize(['superadmin']), authentication.deleteHrAdminRole);
+
+// Employer-side access management
+authRouter.get('/employer/access-roles', authenticate, authorize(['employer']), authentication.getEmployerAccessRoles);
+authRouter.post('/employer/access-roles', authenticate, authorize(['employer']), authentication.createEmployerAccessRole);
+authRouter.delete('/employer/access-roles/:id', authenticate, authorize(['employer']), authentication.deleteEmployerAccessRole);
+authRouter.get('/employer/access-accounts', authenticate, authorize(['employer']), authentication.getEmployerAccessAccounts);
+authRouter.post('/employer/access-accounts', authenticate, authorize(['employer']), authentication.createEmployerAccessAccount);
+authRouter.put('/employer/access-accounts/:id', authenticate, authorize(['employer']), authentication.updateEmployerAccessAccount);
+authRouter.delete('/employer/access-accounts/:id', authenticate, authorize(['employer']), authentication.deleteEmployerAccessAccount);
+
 // Update user status (hr-admin or superadmin only)
 // :id is the user ID whose status is to be updated
 authRouter.put('/admin/users/status/:id', authenticate, authorize(['hr-admin', 'superadmin']), authentication.updateUserStatus);

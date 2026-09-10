@@ -12,7 +12,7 @@ import FunctionalArea from '../models/functionalArea.model.js';
 import Role from '../models/role.model.js';
 import Skill from '../models/skill.model.js';
 import { ForbiddenError, BadRequestError, NotFoundError } from "../utils/errors.js";
-import { sendCandidateProfileStatusEmail, sendSuperadminAlertEmail, sendProfileDeletionEmail, sendJobApplicationNotificationEmail, sendCandidateApplicationConfirmationEmail } from '../utils/mailer.js';
+import { sendCandidateProfileStatusEmail, sendSuperadminAlertEmail, sendProfileDeletionEmail, sendCandidateApplicationConfirmationEmail } from '../utils/mailer.js';
 import { createNotification, notificationPresets } from '../utils/notificationHelper.js';
 import { sendPushToUsers } from '../utils/fcm.js';
 import { SUPERADMIN_EMAIL, THROTTLING_RETRY_DELAY_BASE } from "../config/env.js";
@@ -1249,6 +1249,11 @@ candidateController.applyToJob = async (req, res, next) => {
     const jobPostId = req.params.jobId;
     const { description, coverLetter } = req.body;
     const files = req.files || {};
+    const candidateUser = await User.findById(candidateId).select('name email role');
+
+    if (!candidateUser || candidateUser.role !== 'candidate') {
+      throw new BadRequestError('Candidate user not found');
+    }
 
     // Ensure job post exists and is published
     const jobPost = await JobPost.findById(jobPostId).populate('companyProfile', 'companyName');
@@ -1370,7 +1375,7 @@ candidateController.applyToJob = async (req, res, next) => {
             userRole: 'candidate',
             message: `${candidateProfile.fullName || candidateUser.name || 'Candidate'} applied to "${jobPost.title}" (${jobPost.companyProfile?.companyName || 'N/A'})`,
             actorEmail: candidateUser.email || candidateProfile.email || 'Candidate',
-            dashboardLink: `${process.env.FRONTEND_URL}/super-admin-dashboard/all-applicants`,
+            dashboardLink: `${process.env.FRONTEND_URL}/super-admin-dashboard/manage-jobs`,
           })
         )
       );
@@ -1390,59 +1395,6 @@ candidateController.applyToJob = async (req, res, next) => {
       console.warn(
         `[JOB_APPLY_ADMIN_ALERT] Skipped for application="${newApplication._id}" because no recipients found`
       );
-    }
-
-    // Send email to the user who posted the job (postedBy). Fallback: employer owner.
-    try {
-      const jobPoster = await User.findById(jobPost.postedBy || jobPost.employer).select('email name role');
-      if (jobPoster && jobPoster.email) {
-        console.log(
-          `[JOB_APPLY_POSTER_ALERT] Triggered for application="${newApplication._id}" -> ${jobPoster.email}`
-        );
-        await sendJobApplicationNotificationEmail({
-          employerEmail: jobPoster.email,
-          employerName: jobPoster.name || 'Employer',
-          candidateName: candidateProfile.fullName || candidateUser.name || 'A candidate',
-          jobTitle: jobPost.title,
-          companyName: jobPost.companyProfile?.companyName || 'Company',
-          dashboardLink: `${process.env.FRONTEND_URL}/employers-dashboard/shortlisted-resumes`,
-        });
-        console.log(
-          `[JOB_APPLY_POSTER_ALERT] Sent successfully -> ${jobPoster.email}`
-        );
-        const posterNotificationPayload = {
-        ...notificationPresets.emailUpdate(
-          'New Job Application',
-          `${candidateProfile.fullName || candidateUser.name || 'A candidate'} has applied for ${jobPost.title}.`
-          ),
-          jobPost: jobPostId,
-          application: newApplication._id,
-          actionUrl: '/employers-dashboard/all-applicants',
-        };
-
-        await createNotification(jobPoster._id, 'email_update', posterNotificationPayload);
-        await sendPushToUsers([jobPoster._id], {
-          title: posterNotificationPayload.title,
-          body: posterNotificationPayload.description,
-          link: `${process.env.FRONTEND_URL}${posterNotificationPayload.actionUrl}`,
-          data: {
-            type: 'new_job_application',
-            jobPostId,
-            applicationId: newApplication._id,
-            actionUrl: posterNotificationPayload.actionUrl,
-          },
-        });
-      } else {
-        console.warn(
-          `[JOB_APPLY_POSTER_ALERT] Skipped for application="${newApplication._id}" because poster email not found`
-        );
-      }
-    } catch (emailError) {
-      console.error(
-        `[JOB_APPLY_POSTER_ALERT] Failed for application="${newApplication._id}":`,
-        emailError?.message || emailError
-      );
-      // Don't throw - let the application succeed even if email fails
     }
 
     // Send confirmation email to candidate

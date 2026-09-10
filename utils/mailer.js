@@ -6,9 +6,13 @@ const isProd = process.env.NODE_ENV === "production";
 
 // mail delay helper
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+const liveHrMailAddress = process.env.MAIL_HR || 'hr@coimbatorejobs.in';
 const defaultFromAddress = isProd
-  ? (process.env.MAIL_FROM || 'no-reply@coimbatorejobs.in')
+  ? liveHrMailAddress
   : (process.env.EMAIL_USER || process.env.MAIL_FROM || 'no-reply@coimbatorejobs.in');
+const primaryInboundMailAddress = isProd
+  ? liveHrMailAddress
+  : (process.env.EMAIL_USER || process.env.SUPERADMIN_EMAIL || process.env.MAIL_GENERAL);
 
 const escapeHtml = (value = '') =>
   String(value ?? '')
@@ -19,6 +23,13 @@ const escapeHtml = (value = '') =>
     .replace(/'/g, '&#39;');
 
 let transporter;
+const smtpPoolOptions = {
+  pool: true,
+  maxConnections: Number(process.env.SMTP_MAX_CONNECTIONS || 3),
+  maxMessages: Number(process.env.SMTP_MAX_MESSAGES || 100),
+  rateDelta: 1000,
+  rateLimit: Number(process.env.SMTP_RATE_LIMIT || 5),
+};
 
 if (isProd) {
   // AWS SES in Production
@@ -33,6 +44,10 @@ if (isProd) {
     tls: {
       rejectUnauthorized: false,      // Required for SES in some environments
     },
+    ...smtpPoolOptions,
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 10000,
   });
 } else {
   // Development â†’ Mailtrap
@@ -59,7 +74,8 @@ if (isProd) {
         },
         connectionTimeout: 10000,
         greetingTimeout: 10000,
-        socketTimeout: 10000
+        socketTimeout: 10000,
+        ...smtpPoolOptions,
   });
 
 }
@@ -119,12 +135,24 @@ transporter.verify((error) => {
 
 
 // BASE EMAIL SENDER (DO NOT CHANGE UI)
-const sendMail = async ({ to, subject, html, text = '', cc = [], from, attachments = [] }) => {
+const cleanRecipients = (recipients = []) =>
+  (Array.isArray(recipients) ? recipients : [recipients]).filter(Boolean);
+
+const resolveFromAddress = (from) => {
+  if (isProd) {
+    return `"Coimbatore Jobs" <${defaultFromAddress}>`;
+  }
+
+  return from || `"Coimbatore Jobs" <${defaultFromAddress}>`;
+};
+
+const sendMail = async ({ to, subject, html, text = '', cc = [], from, replyTo, attachments = [] }) => {
   try {
     const info = await transporter.sendMail({
-      from: from || `"Coimbatore Jobs" <${defaultFromAddress}>`,
+      from: resolveFromAddress(from),
       to,
-      cc,
+      cc: cleanRecipients(cc),
+      replyTo,
       subject,
       text,
       html,
@@ -319,7 +347,6 @@ const sendLoginOtpEmail = async ({ recipient, name, otp, expiresInMinutes = 10, 
           </p>
         </div>
       `,
-      cc: [process.env.MAIL_SECURITY]
     });
 
     console.log(`${roleLabel} login OTP email sent to ${recipient}`);
@@ -813,10 +840,11 @@ export const sendContactEmails = async ({
   `;
 
   await sendMail({
-    to: process.env.MAIL_GENERAL || process.env.SUPERADMIN_EMAIL,
+    to: primaryInboundMailAddress,
     subject: `New Contact Inquiry (${formType})`,
     html: adminHtml,
-    cc: [process.env.MAIL_SUPPORT]
+    replyTo: email,
+    cc: isProd ? [] : [process.env.MAIL_SUPPORT]
   });
 
   // User auto-reply
@@ -835,8 +863,10 @@ export const sendContactEmails = async ({
     <strong>Coimbatore Jobs Team</strong></p>
   `;
 
-   // Small delay for Mailtrap
-  await new Promise(resolve => setTimeout(resolve, 8000)); //remove when in production
+   // Small delay only for local Gmail/Mailtrap testing.
+  if (!isProd) {
+    await new Promise(resolve => setTimeout(resolve, 8000));
+  }
 
   await sendMail({
     to: email,
@@ -890,6 +920,59 @@ const sendJobApplicationNotificationEmail = async ({ employerEmail, employerName
     console.log(`Job application notification sent to ${employerEmail}`);
   } catch (error) {
     console.error(`Failed to send job application notification to ${employerEmail}:`, error);
+  }
+};
+
+const sendEmployerApplicantsReleasedEmail = async ({
+  employerEmail,
+  employerName,
+  jobTitle,
+  companyName,
+  releasedCount,
+  totalReleasedCount,
+  dashboardLink,
+}) => {
+  try {
+    if (!employerEmail) throw new Error('Employer email is missing');
+
+    const safeReleasedCount = Number(releasedCount || 0);
+    const safeTotalReleasedCount = Number(totalReleasedCount || safeReleasedCount);
+
+    await sendMail({
+      from: `"Coimbatore Jobs Applications" <${defaultFromAddress}>`,
+      to: employerEmail,
+      subject: `${safeTotalReleasedCount} candidates available for ${jobTitle}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1e293b;">
+          <h2 style="color: #2563eb;">Candidates Are Ready to Review</h2>
+          <p>Dear ${escapeHtml(employerName || 'Employer')},</p>
+          <p>Our admin team has reviewed and released candidates for your job role.</p>
+
+          <div style="background: #f0f9ff; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #2563eb;">
+            <p style="margin: 5px 0;"><strong>Job Title:</strong> ${escapeHtml(jobTitle || 'Job Role')}</p>
+            <p style="margin: 5px 0;"><strong>Company:</strong> ${escapeHtml(companyName || 'Company')}</p>
+            <p style="margin: 5px 0;"><strong>New Candidates Released:</strong> ${safeReleasedCount}</p>
+            <p style="margin: 5px 0;"><strong>Total Candidates Available:</strong> ${safeTotalReleasedCount}</p>
+          </div>
+
+          <p>${safeTotalReleasedCount} candidates have applied for this job role and are now available in your dashboard. Please check your dashboard and start the hiring process.</p>
+
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${dashboardLink}"
+               style="background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+              View Candidates
+            </a>
+          </div>
+
+          <p style="color: #64748b; font-size: 12px; text-align: center;">
+            &copy; ${new Date().getFullYear()} Coimbatore Jobs by Cispro. All rights reserved.
+          </p>
+        </div>
+      `,
+    });
+    console.log(`Released applicants email sent to ${employerEmail}`);
+  } catch (error) {
+    console.error(`Failed to send released applicants email to ${employerEmail}:`, error);
   }
 };
 
@@ -1094,12 +1177,14 @@ const sendEmployerJobPostedEmail = async ({
 }) => {
   try {
     if (!recipient) throw new Error('Employer email is missing');
-    const actionLink = jobDetailsLink || dashboardLink || resolveFrontendBaseUrl();
-    const subjectPrefix = postedByAdmin ? 'New Job Posted by Coimbatore Jobs Administration' : 'Job Posted Successfully';
+    const actionLink = postedByAdmin
+      ? (dashboardLink || resolveFrontendBaseUrl('/employers-dashboard/manage-jobs'))
+      : (jobDetailsLink || dashboardLink || resolveFrontendBaseUrl());
+    const subjectPrefix = postedByAdmin ? 'Action Required: Approve Job Posted for Your Company' : 'Job Posted Successfully';
     const introText = postedByAdmin
-      ? 'Coimbatore Jobs administration has posted a new job on behalf of your company.'
+      ? 'Coimbatore Jobs Administration has created a job post for your company. Please check the job details in your Manage Jobs page and approve it to publish the job.'
       : 'Your new job has been posted successfully on Coimbatore Jobs.';
-    const titleText = postedByAdmin ? 'New Job Posted by Coimbatore Jobs Administration' : 'Your Job Post is Live';
+    const titleText = postedByAdmin ? 'Please Approve This Job Post' : 'Your Job Post is Live';
     const detailRows = [
       ['Job Title', jobTitle],
       ['Company', companyName],
@@ -1141,11 +1226,11 @@ const sendEmployerJobPostedEmail = async ({
                 ${detailRows}
               </tbody>
             </table>
-            <p>Please review the job details and let us know if any changes are required.</p>
+            <p>${postedByAdmin ? 'Click the button below to open Manage Jobs, review the details, and approve or ignore this job post.' : 'Please review the job details and let us know if any changes are required.'}</p>
             <div style="text-align: center; margin: 30px 0;">
               <a href="${escapeHtml(actionLink)}"
                  style="background: #2563eb; color: white; padding: 13px 24px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: 700;">
-                View Job Details
+                ${postedByAdmin ? 'Open Manage Jobs' : 'View Job Details'}
               </a>
             </div>
             <p style="margin-bottom: 0;">Regards,<br><strong>Coimbatore Jobs Administration</strong></p>
@@ -1327,5 +1412,5 @@ const sendPlanReceiptEmail = async ({
   }
 };
 
-export { sendJobAlertEmail, sendJobAlertSetupConfirmationEmail, sendResumeAlertEmail, sendPasswordResetEmail, sendLoginOtpEmail, sendWelcomeEmail, sendSuperadminAlertEmail, sendUserStatusUpdateEmail, sendPasswordResetSuccessEmail, sendAdminPasswordResetEmail, sendProfileDeletionEmail, sendCandidateAccountDeletedAlertEmail, sendCompanyProfileStatusEmail, sendCandidateProfileStatusEmail, sendJobApplicationNotificationEmail, sendCandidateApplicationConfirmationEmail, sendApplicationStatusUpdateEmail, sendEmployerJobPostedEmail, sendDemandCandidateStatusEmail, sendPlanReceiptEmail };
+export { sendJobAlertEmail, sendJobAlertSetupConfirmationEmail, sendResumeAlertEmail, sendPasswordResetEmail, sendLoginOtpEmail, sendWelcomeEmail, sendSuperadminAlertEmail, sendUserStatusUpdateEmail, sendPasswordResetSuccessEmail, sendAdminPasswordResetEmail, sendProfileDeletionEmail, sendCandidateAccountDeletedAlertEmail, sendCompanyProfileStatusEmail, sendCandidateProfileStatusEmail, sendJobApplicationNotificationEmail, sendEmployerApplicantsReleasedEmail, sendCandidateApplicationConfirmationEmail, sendApplicationStatusUpdateEmail, sendEmployerJobPostedEmail, sendDemandCandidateStatusEmail, sendPlanReceiptEmail };
 

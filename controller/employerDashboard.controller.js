@@ -4,6 +4,7 @@ import CompanyProfile from "../models/companyProfile.model.js";
 import CandidateProfile from '../models/candidateProfile.model.js';
 import User from '../models/user.model.js';
 import mongoose from 'mongoose';
+import { getEffectiveEmployerId } from '../utils/roleHelper.js';
 
 const dashboardController = {};
 
@@ -14,7 +15,7 @@ const dashboardController = {};
  */
 dashboardController.getDashboardStats = async (req, res, next) => {
   try {
-    const employerId = req.user.id;
+    const employerId = getEffectiveEmployerId(req.user);
     const startOfMonth = new Date();
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
@@ -143,7 +144,7 @@ dashboardController.getDashboardStats = async (req, res, next) => {
  */
 dashboardController.getProfileViewsData = async (req, res, next) => {
   try {
-    const employerId = req.user.id;
+    const employerId = getEffectiveEmployerId(req.user);
     const { range = '6' } = req.query;
     const monthsBack = parseInt(range, 10);
 
@@ -197,7 +198,7 @@ dashboardController.getProfileViewsData = async (req, res, next) => {
  */
 dashboardController.getRecentActivity = async (req, res, next) => {
   try {
-    const employerId = req.user.id;
+    const employerId = getEffectiveEmployerId(req.user);
     const limit = parseInt(req.query.limit) || 10;
 
     const employerJobs = await JobPost.find({ employer: employerId }).select('_id title');
@@ -341,7 +342,7 @@ dashboardController.getRecentActivity = async (req, res, next) => {
  */
 dashboardController.getApplicationTrends = async (req, res, next) => {
   try {
-    const employerId = req.user.id;
+    const employerId = getEffectiveEmployerId(req.user);
     const { period = 'monthly' } = req.query; // daily, weekly, monthly
 
     const employerJobs = await JobPost.find({ employer: employerId }).select('_id');
@@ -438,7 +439,7 @@ dashboardController.getApplicationTrends = async (req, res, next) => {
  */
 dashboardController.getJobStatusDistribution = async (req, res, next) => {
   try {
-    const employerId = req.user.id;
+    const employerId = getEffectiveEmployerId(req.user);
 
     const distribution = await JobPost.aggregate([
       {

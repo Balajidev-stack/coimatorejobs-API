@@ -179,7 +179,6 @@ const jobPostSchema = new mongoose.Schema({
   collarCategory: {
     type: String,
     required: [true, 'Collar category is required'],
-    enum: COLLAR_CATEGORIES,
     trim: true,
   },
   skills: {
@@ -256,6 +255,25 @@ const jobPostSchema = new mongoose.Schema({
     type: String,
     enum: ['Draft', 'Published', 'Closed'],
     default: 'Published',
+  },
+  jobApprovalStatus: {
+    type: String,
+    enum: ['not_required', 'pending', 'accepted', 'ignored'],
+    default: 'not_required',
+    index: true,
+  },
+  jobApprovalRequestedAt: {
+    type: Date,
+    default: null,
+  },
+  jobApprovalRespondedAt: {
+    type: Date,
+    default: null,
+  },
+  jobApprovalRespondedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null,
   },
   candidateSelectionSource: {
     type: String,

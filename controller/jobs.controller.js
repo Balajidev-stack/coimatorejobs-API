@@ -1,7 +1,10 @@
 import mongoose from "mongoose";
+import ExcelJS from 'exceljs';
+import { Readable } from 'stream';
 import JobPost from '../models/jobs.model.js';
 import CompanyProfile from '../models/companyProfile.model.js';
 import User from '../models/user.model.js';
+import Application from '../models/jobApply.model.js';
 import Role from '../models/role.model.js';
 import Location from '../models/location.model.js';
 import Skill from '../models/skill.model.js';
@@ -27,12 +30,70 @@ import {
   requireEmployerJobPostLimit,
   resolveEmployerPlan,
 } from '../utils/employerPlanAccess.js';
+import { getEffectiveEmployerId } from '../utils/roleHelper.js';
 import crypto from 'crypto';
 
 const jobsController = {};
 const MONTHLY_RESUME_LIMIT = 5;
 const JOB_ID_PREFIX = "JOB";
 const INTERNAL_EMPLOYER_EMAIL_REGEX = /^employer_.*_@internal\.coimbatorejobs\.in$/i;
+const BULK_JOB_TEMPLATE_COLUMNS = [
+  { header: 'S.No (Mandatory)', key: 'serialNumber', width: 18 },
+  { header: 'Industry (Mandatory)', key: 'industry', width: 28 },
+  { header: 'Functional Area (Department) (Mandatory)', key: 'functionalAreas', width: 36 },
+  { header: 'Role / Job Title (Mandatory)', key: 'title', width: 28 },
+  { header: 'Collar Category (Mandatory)', key: 'collarCategory', width: 24 },
+  { header: 'Job Description (Mandatory)', key: 'description', width: 44 },
+  { header: 'Required Skills', key: 'skills', width: 30 },
+  { header: 'Contact Email (Mandatory)', key: 'contactEmail', width: 30 },
+  { header: 'Contact Username', key: 'contactUsername', width: 24 },
+  { header: 'Minimum Salary (Mandatory)', key: 'salaryMin', width: 22 },
+  { header: 'Maximum Salary (Mandatory)', key: 'salaryMax', width: 22 },
+  { header: 'Salary Unit (Mandatory)', key: 'salaryUnit', width: 22 },
+  { header: 'Experience (Mandatory)', key: 'experience', width: 20 },
+  { header: 'Qualification Type (Mandatory)', key: 'qualificationType', width: 28 },
+  { header: 'Exact Degree (Mandatory)', key: 'qualification', width: 32 },
+  { header: 'Gender', key: 'gender', width: 18 },
+  { header: 'Job Type (Mandatory)', key: 'jobType', width: 20 },
+  { header: 'Career Level (Mandatory)', key: 'careerLevel', width: 22 },
+  { header: 'Application Deadline (Mandatory)', key: 'applicationDeadline', width: 26 },
+  { header: 'Number of Openings (Mandatory)', key: 'positions', width: 26 },
+  { header: 'Max Applicants Allowed', key: 'maxApplicants', width: 24 },
+  { header: 'Target Cities (Mandatory)', key: 'cities', width: 30 },
+  { header: 'Country (Mandatory)', key: 'country', width: 20 },
+  { header: 'Office Address (HQ) (Mandatory)', key: 'completeAddress', width: 40 },
+  { header: 'Work Arrangement', key: 'remoteWork', width: 20 },
+  { header: 'Job Status', key: 'jobStatus', width: 18 },
+];
+
+const BULK_JOB_SAMPLE_ROW = {
+  serialNumber: 'EX',
+  industry: 'Information Technology',
+  functionalAreas: 'Software Development',
+  title: 'React Developer',
+  collarCategory: 'White Collar',
+  description: 'Build and maintain web applications.',
+  skills: 'React, JavaScript, Next.js',
+  contactEmail: 'hr@example.com',
+  contactUsername: 'HR Team',
+  salaryMin: '3',
+  salaryMax: '6',
+  salaryUnit: 'LPA',
+  experience: '1-3 Years',
+  qualificationType: 'ALL',
+  qualification: 'BE CSE, BTech AI DS',
+  gender: 'No Preference',
+  jobType: 'Full-time',
+  careerLevel: 'Mid Level',
+  applicationDeadline: '2026-12-31',
+  positions: '5',
+  maxApplicants: '100',
+  cities: 'Coimbatore, Chennai',
+  country: 'India',
+  completeAddress: 'Coimbatore office address',
+  remoteWork: 'On-site',
+  jobStatus: 'Published',
+};
 
 const buildJobId = () =>
   `${JOB_ID_PREFIX}-${crypto.randomInt(10000000, 100000000)}`;
@@ -82,6 +143,194 @@ const isRealEmail = (value = '') => {
     !email.endsWith('@internal.coimbatorejobs.in') &&
     !INTERNAL_EMPLOYER_EMAIL_REGEX.test(email)
   );
+};
+
+const shouldTreatAsSentenceBoundary = (input, index) => {
+  const char = input[index];
+  if (char === '!' || char === '?') return true;
+  if (char !== '.') return false;
+
+  const nextChar = input[index + 1];
+  if (!nextChar) return true;
+
+  return /\s/.test(nextChar) || nextChar === '<' || nextChar === '&' || /["')\]}]/.test(nextChar);
+};
+
+const copyUnchangedToken = (input, startIndex, result) => {
+  const remaining = input.slice(startIndex);
+  const protectedMatch = /^(https?:\/\/|www\.)[^\s<]+|^[^\s@<]+@[^\s@<]+\.[^\s@<]+/i.exec(remaining);
+
+  if (!protectedMatch) {
+    return { copied: false, result, nextIndex: startIndex };
+  }
+
+  return {
+    copied: true,
+    result: result + protectedMatch[0],
+    nextIndex: startIndex + protectedMatch[0].length - 1,
+  };
+};
+
+const htmlEntityMap = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  nbsp: ' ',
+};
+
+const decodeHtmlEntities = (value = '') =>
+  String(value || '').replace(/&(#(\d+)|#x([\da-f]+)|[a-z]+);/gi, (match, entity, decimal, hex) => {
+    if (decimal) return String.fromCodePoint(Number(decimal));
+    if (hex) return String.fromCodePoint(parseInt(hex, 16));
+    return htmlEntityMap[entity.toLowerCase()] ?? match;
+  });
+
+const stripHtmlToText = (value = '') =>
+  String(value || '')
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<\/?(p|div|section|article|header|footer|h[1-6]|tr|table|ul|ol)\b[^>]*>/gi, '\n')
+    .replace(/<li\b[^>]*>/gi, '\n- ')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, '');
+
+const escapeHtml = (value = '') =>
+  String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const plainTextToHtml = (value = '') =>
+  normalizeJobDescriptionText(value)
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.replace(/\n/g, '<br>'))
+    .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/&lt;br&gt;/g, '<br>')}</p>`)
+    .join('');
+
+const getSafeQuillClassAttribute = (attrs = '') => {
+  const classMatch = /\sclass=(["'])(.*?)\1/i.exec(attrs);
+  if (!classMatch) return '';
+
+  const safeClasses = classMatch[2]
+    .split(/\s+/)
+    .filter((className) =>
+      /^ql-align-(center|right|justify)$/i.test(className)
+    );
+
+  return safeClasses.length ? ` class="${safeClasses.join(' ')}"` : '';
+};
+
+const normalizeJobDescriptionText = (value = '') => {
+  const input = String(value || '');
+  const withoutHtml = /<\/?[a-z][\s\S]*>/i.test(input) ? stripHtmlToText(input) : input;
+
+  return decodeHtmlEntities(withoutHtml)
+    .normalize('NFKC')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .replace(/\u00A0/g, ' ')
+    .replace(/[ \t\f\v]+/g, ' ')
+    .replace(/ *\n+ */g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .split('\n')
+    .map((line) => line.trim())
+    .join('\n')
+    .trim();
+};
+
+const sanitizeJobDescriptionHtml = (value = '') => {
+  const rawInput = String(value || '').trim();
+  const input = /&lt;\/?(p|h[1-6]|ul|ol|li|strong|em|span|div|br|a)\b/i.test(rawInput)
+    ? decodeHtmlEntities(rawInput)
+    : rawInput;
+  if (!input) return '';
+  if (!/<\/?[a-z][\s\S]*>/i.test(input)) return plainTextToHtml(input);
+
+  return input
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<\/?h[4-6]\b[^>]*>/gi, (tag) => (tag.startsWith('</') ? '</p>' : '<p>'))
+    .replace(/<span\b([^>]*)>/gi, (_match, attrs) => `<span${getSafeQuillClassAttribute(attrs)}>`)
+    .replace(/<div\b([^>]*)>/gi, (_match, attrs) => `<p${getSafeQuillClassAttribute(attrs)}>`)
+    .replace(/<\/div>/gi, '</p>')
+    .replace(/<b\b[^>]*>/gi, '<strong>')
+    .replace(/<\/b>/gi, '</strong>')
+    .replace(/<i\b[^>]*>/gi, '<em>')
+    .replace(/<\/i>/gi, '</em>')
+    .replace(/<a\b[^>]*href=(["'])(.*?)\1[^>]*>/gi, (_match, _quote, href) => {
+      const safeHref = /^(https?:\/\/|mailto:|tel:|\/)/i.test(href) ? href : '#';
+      return `<a href="${escapeHtml(safeHref)}" target="_blank" rel="noopener noreferrer">`;
+    })
+    .replace(/<a\b[^>]*>/gi, '<a href="#">')
+    .replace(/<br\b[^>]*\/?>/gi, '<br>')
+    .replace(/<(p|ul|ol|li|strong|em|u|s|h[1-3])\b([^>]*)>/gi, (_match, tag, attrs) => `<${tag.toLowerCase()}${getSafeQuillClassAttribute(attrs)}>`)
+    .replace(/<\/(p|ul|ol|li|strong|em|u|s|h[1-3]|span)>/gi, (_match, tag) => `</${tag.toLowerCase()}>`)
+    .replace(/<(?!\/?a\b|br\b|\/?(p|ul|ol|li|strong|em|u|s|h[1-3]|span)\b)[^>]+>/gi, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/[ \t\f\v]+/g, ' ')
+    .replace(/>\s+</g, '><')
+    .trim();
+};
+
+const normalizeJobDescriptionSentences = (value = '') => {
+  const input = normalizeJobDescriptionText(value);
+  let result = '';
+  let shouldCapitalize = true;
+
+  for (let i = 0; i < input.length; i += 1) {
+    const char = input[i];
+
+    if (char === '<') {
+      const tagEndIndex = input.indexOf('>', i + 1);
+      if (tagEndIndex === -1) {
+        result += char;
+        continue;
+      }
+
+      const tag = input.slice(i, tagEndIndex + 1);
+      result += tag;
+      if (/^<\/?(p|div|li|br|h[1-6])\b/i.test(tag)) {
+        shouldCapitalize = true;
+      }
+      i = tagEndIndex;
+      continue;
+    }
+
+    if (char === '&') {
+      const entityEndIndex = input.indexOf(';', i + 1);
+      if (entityEndIndex !== -1 && entityEndIndex - i <= 12) {
+        result += input.slice(i, entityEndIndex + 1);
+        i = entityEndIndex;
+        continue;
+      }
+    }
+
+    if (shouldCapitalize) {
+      const protectedToken = copyUnchangedToken(input, i, result);
+      if (protectedToken.copied) {
+        result = protectedToken.result;
+        shouldCapitalize = false;
+        i = protectedToken.nextIndex;
+        continue;
+      }
+    }
+
+    if (/[A-Za-z]/.test(char)) {
+      result += shouldCapitalize ? char.toUpperCase() : char;
+      shouldCapitalize = false;
+      continue;
+    }
+
+    result += char;
+    if (shouldTreatAsSentenceBoundary(input, i)) {
+      shouldCapitalize = true;
+    }
+  }
+
+  return result;
 };
 
 const addRealEmail = (recipients, value) => {
@@ -387,6 +636,302 @@ const resolveSkillIds = async (skillsInput = []) => {
   return Array.from(new Set(ids.map((id) => String(id))));
 };
 
+const splitBulkValues = (value) =>
+  toSafeString(value)
+    .split(/[,;\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+const hasBulkValue = (value) => {
+  if (value instanceof Date) return true;
+  return Boolean(toSafeString(value));
+};
+
+const normalizeHeaderKey = (value) =>
+  toSafeString(value)
+    .replace(/\(mandatory\)/ig, '')
+    .replace(/[^a-z0-9]+/gi, '')
+    .toLowerCase();
+
+const BULK_HEADER_KEY_MAP = new Map(
+  BULK_JOB_TEMPLATE_COLUMNS.map((column) => [normalizeHeaderKey(column.header), column.key])
+);
+
+const getCellText = (cell) => {
+  const value = cell?.value;
+  if (value === null || value === undefined) return '';
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  if (typeof value === 'object') {
+    if (value.text) return toSafeString(value.text);
+    if (value.result !== undefined) return toSafeString(value.result);
+    if (Array.isArray(value.richText)) return value.richText.map((part) => part.text || '').join('').trim();
+    if (value.hyperlink && value.text) return toSafeString(value.text);
+  }
+  return toSafeString(value);
+};
+
+const getCellDate = (cell) => {
+  const value = cell?.value;
+  if (value instanceof Date) return value;
+  const text = getCellText(cell);
+  if (!text) return null;
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const getBulkJobCycleDateFilter = (cycle = 'Monthly') => {
+  if (cycle === 'Total') return {};
+
+  const now = new Date();
+  const start = new Date(now);
+  if (cycle === 'Daily') {
+    start.setHours(0, 0, 0, 0);
+  } else {
+    start.setDate(1);
+    start.setHours(0, 0, 0, 0);
+  }
+  return { createdAt: { $gte: start } };
+};
+
+const ensureBulkJobPlanLimit = async (req, res, employerId, incomingCount) => {
+  if (req.user?.role !== 'employer') return true;
+
+  const plan = await resolveEmployerPlan(req.user.id);
+  if (!plan) {
+    res.status(403).json({
+      success: false,
+      code: 'PLAN_REQUIRED',
+      message: 'Your employer account needs an active payment plan to use this feature.',
+    });
+    return false;
+  }
+
+  const feature = getFeatureLimit(plan, 'jobPostingLimit', 'jobLimit');
+  if (!feature.enabled || feature.limit === 0) {
+    res.status(403).json({
+      success: false,
+      code: 'PLAN_LIMIT_REACHED',
+      message: 'Job posting is not included in your current plan.',
+    });
+    return false;
+  }
+
+  if (feature.limit === -1) return true;
+
+  const used = await JobPost.countDocuments({
+    employer: employerId || req.user.id,
+    ...getBulkJobCycleDateFilter(feature.cycle),
+  });
+  const remaining = Math.max(Number(feature.limit || 0) - used, 0);
+
+  if (incomingCount > remaining) {
+    res.status(429).json({
+      success: false,
+      code: 'PLAN_LIMIT_REACHED',
+      message: `Bulk upload has ${incomingCount} job(s), but your current plan allows only ${remaining} more job post(s) this ${feature.cycle.toLowerCase()} cycle.`,
+      limit: feature.limit,
+      used,
+      remaining,
+      cycle: feature.cycle,
+    });
+    return false;
+  }
+
+  return true;
+};
+
+const resolveBulkCompanyProfile = async ({ employerId }) => {
+  const profiles = await CompanyProfile.find({ employer: employerId })
+    .select('_id companyName status employer email')
+    .sort({ createdAt: 1 });
+  if (!profiles.length) {
+    throw new NotFoundError('Company profile not found for this employer, Please create a company profile first.');
+  }
+
+  const profile = profiles.find((item) => item.status === 'approved');
+  if (!profile) throw new ForbiddenError('Company profile must be approved before posting jobs');
+
+  return profile;
+};
+
+const buildBulkJobPayload = (row, companyProfileDoc, req) => {
+  const requiredColumns = [
+    ['industry', 'Industry'],
+    ['functionalAreas', 'Functional Area (Department)'],
+    ['title', 'Role / Job Title'],
+    ['collarCategory', 'Collar Category'],
+    ['description', 'Job Description'],
+    ['contactEmail', 'Contact Email'],
+    ['salaryMin', 'Minimum Salary'],
+    ['salaryMax', 'Maximum Salary'],
+    ['salaryUnit', 'Salary Unit'],
+    ['experience', 'Experience'],
+    ['qualificationType', 'Qualification Type'],
+    ['qualification', 'Exact Degree'],
+    ['jobType', 'Job Type'],
+    ['careerLevel', 'Career Level'],
+    ['applicationDeadline', 'Application Deadline'],
+    ['positions', 'Number of Openings'],
+    ['cities', 'Target Cities'],
+    ['country', 'Country'],
+    ['completeAddress', 'Office Address (HQ)'],
+  ];
+  const missingColumns = requiredColumns
+    .filter(([key]) => !hasBulkValue(row[key]))
+    .map(([, label]) => label);
+
+  if (missingColumns.length) {
+    throw new BadRequestError(`Missing mandatory column values: ${missingColumns.join(', ')}`);
+  }
+
+  const salaryUnit = toSafeString(row.salaryUnit);
+  const normalizedSalaryUnit = salaryUnit
+    .toLowerCase()
+    .replace(/₹/g, 'rs')
+    .replace(/\s+/g, '');
+  const isMonthlyK = normalizedSalaryUnit.includes('k/month') || normalizedSalaryUnit.includes('kpermonth') || normalizedSalaryUnit.includes('rs k/month'.replace(/\s+/g, ''));
+  const offeredSalary = isMonthlyK
+    ? `${toSafeString(row.salaryMin)}K - ${toSafeString(row.salaryMax)}K /Month`
+    : `${toSafeString(row.salaryMin)} - ${toSafeString(row.salaryMax)} LPA`;
+
+  return {
+    title: toSafeString(row.title),
+    description: normalizeJobDescriptionSentences(toSafeString(row.description)),
+    contactEmail: toSafeString(row.contactEmail) || companyProfileDoc.email,
+    contactUsername: toSafeString(row.contactUsername),
+    jobType: toSafeString(row.jobType) || 'Full-time',
+    offeredSalary,
+    careerLevel: toSafeString(row.careerLevel),
+    experience: toSafeString(row.experience),
+    gender: toSafeString(row.gender) || 'No Preference',
+    industry: toSafeString(row.industry),
+    qualification: splitBulkValues(row.qualification),
+    applicationDeadline: row.applicationDeadline,
+    location: {
+      country: toSafeString(row.country) || 'India',
+      city: splitBulkValues(row.cities),
+      completeAddress: toSafeString(row.completeAddress),
+    },
+    remoteWork: toSafeString(row.remoteWork) || 'On-site',
+    positions: { total: Number(row.positions) || 0 },
+    maxApplicants: row.maxApplicants ? Number(row.maxApplicants) : null,
+    companyProfile: companyProfileDoc._id,
+    role: toSafeString(row.title),
+    collarCategory: toSafeString(row.collarCategory),
+    skills: splitBulkValues(row.skills),
+    functionalAreas: splitBulkValues(row.functionalAreas),
+    postedBy: req.user.id,
+  };
+};
+
+const createJobPostFromPayload = async ({ payload, employerId, userRole, actorId }) => {
+  const {
+    title,
+    description,
+    contactEmail,
+    contactUsername,
+    jobType,
+    offeredSalary,
+    salary,
+    careerLevel,
+    experience,
+    gender,
+    industry,
+    qualification,
+    applicationDeadline,
+    location,
+    remoteWork,
+    positions,
+    maxApplicants,
+    companyProfile,
+    role,
+    collarCategory,
+    skills = [],
+    functionalAreas = [],
+  } = payload;
+
+  const requiredFields = [
+    'title', 'description', 'contactEmail', 'jobType',
+    'offeredSalary', 'careerLevel', 'experience', 'qualification',
+    'applicationDeadline', 'positions', 'location', 'functionalAreas', 'collarCategory'
+  ];
+  const missingFields = requiredFields.filter(field => !payload[field]);
+  if (missingFields.length > 0) {
+    throw new BadRequestError(`Missing required fields: ${missingFields.join(', ')}`);
+  }
+
+  const normalizedContactEmail = normalizeEmail(contactEmail);
+  if (!isValidEmailAddress(normalizedContactEmail)) {
+    throw new BadRequestError('Please enter a valid contact email address');
+  }
+
+  if (!Array.isArray(qualification) || qualification.length === 0) {
+    throw new BadRequestError('At least one qualification is required');
+  }
+
+  if (!location || !location.country || !Array.isArray(location.city) || location.city.length === 0 || !location.completeAddress) {
+    throw new BadRequestError('Complete location details are required (country, at least one city, completeAddress)');
+  }
+
+  const resolvedIndustryId = await resolveIndustryId(industry);
+  const resolvedFunctionalAreaIds = await resolveFunctionalAreaIds(functionalAreas, resolvedIndustryId);
+  const resolvedRoleId = await resolveRoleId(role, resolvedFunctionalAreaIds, actorId, collarCategory);
+  const resolvedSkillIds = await resolveSkillIds(skills);
+
+  if (!positions || !positions.total || Number(positions.total) < 1) {
+    throw new BadRequestError('Positions must be at least 1');
+  }
+
+  const deadlineDate = applicationDeadline instanceof Date ? applicationDeadline : new Date(applicationDeadline);
+  if (Number.isNaN(deadlineDate.getTime())) {
+    throw new BadRequestError('Invalid application deadline');
+  }
+
+  const normalizedSalary = normalizeSalaryInput(salary);
+  const isPostedByAdmin = ['hr-admin', 'superadmin'].includes(userRole);
+
+  const newJobPost = new JobPost({
+    jobId: await generateUniqueJobId(),
+    employer: employerId,
+    postedBy: actorId,
+    companyProfile,
+    title,
+    description: sanitizeJobDescriptionHtml(description),
+    contactEmail: normalizedContactEmail,
+    contactUsername,
+    jobType,
+    offeredSalary,
+    ...(normalizedSalary ? { salary: normalizedSalary } : {}),
+    careerLevel,
+    experience,
+    gender: gender || 'No Preference',
+    functionalAreas: resolvedFunctionalAreaIds,
+    industry: resolvedIndustryId,
+    role: resolvedRoleId,
+    collarCategory,
+    skills: resolvedSkillIds,
+    qualification,
+    applicationDeadline: deadlineDate,
+    maxApplicants: maxApplicants ? Number(maxApplicants) : null,
+    location: {
+      country: location.country,
+      city: location.city,
+      completeAddress: location.completeAddress,
+    },
+    positions: {
+      total: Number(positions.total),
+      remaining: Number(positions.total),
+    },
+    remoteWork: remoteWork || 'On-site',
+    status: isPostedByAdmin ? 'Draft' : 'Published',
+    jobApprovalStatus: isPostedByAdmin ? 'pending' : 'not_required',
+    jobApprovalRequestedAt: isPostedByAdmin ? new Date() : null,
+  });
+
+  await newJobPost.save();
+  return newJobPost;
+};
+
 const getAdminAlertUsers = async () => {
   const recipientEmails = new Set();
 
@@ -415,6 +960,186 @@ const getAdminAlertUsers = async () => {
   };
 };
 
+jobsController.downloadBulkJobTemplate = async (req, res, next) => {
+  try {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Bulk Jobs');
+    worksheet.columns = BULK_JOB_TEMPLATE_COLUMNS;
+    worksheet.addRow(BULK_JOB_SAMPLE_ROW);
+
+    const headerRow = worksheet.getRow(1);
+    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    headerRow.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF1967D2' },
+    };
+    headerRow.alignment = { vertical: 'middle', wrapText: true };
+    headerRow.eachCell((cell) => {
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFC7D2FE' } },
+        left: { style: 'thin', color: { argb: 'FFC7D2FE' } },
+        bottom: { style: 'thin', color: { argb: 'FFC7D2FE' } },
+        right: { style: 'thin', color: { argb: 'FFC7D2FE' } },
+      };
+    });
+
+    worksheet.views = [{ state: 'frozen', ySplit: 1 }];
+    worksheet.getRow(2).alignment = { wrapText: true };
+    worksheet.getColumn('applicationDeadline').numFmt = 'yyyy-mm-dd';
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename=bulk-job-upload-format.xlsx');
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    next(error);
+  }
+};
+
+jobsController.bulkUploadJobPosts = async (req, res, next) => {
+  try {
+    const file = req.file;
+    if (!file?.buffer) {
+      throw new BadRequestError('Excel file is required');
+    }
+
+    const { id: loggedInUserId, role: userRole } = req.user;
+    let employerId = userRole === 'employer' ? getEffectiveEmployerId(req.user) : loggedInUserId;
+
+    if (['hr-admin', 'superadmin'].includes(userRole)) {
+      if (!req.body.employerId) {
+        throw new BadRequestError('employerId is required for HR-Admin or Superadmin');
+      }
+      employerId = req.body.employerId;
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(employerId)) {
+      throw new BadRequestError('Invalid employerId');
+    }
+
+    const workbook = new ExcelJS.Workbook();
+    const fileName = String(file.originalname || '').toLowerCase();
+    let worksheet = null;
+    if (fileName.endsWith('.csv')) {
+      worksheet = await workbook.csv.read(Readable.from(file.buffer));
+    } else {
+      await workbook.xlsx.load(file.buffer);
+      worksheet = workbook.worksheets[0];
+    }
+    if (!worksheet) throw new BadRequestError('Excel file has no worksheet');
+
+    const headerRow = worksheet.getRow(1);
+    const columnKeyByNumber = new Map();
+    headerRow.eachCell((cell, colNumber) => {
+      const key = BULK_HEADER_KEY_MAP.get(normalizeHeaderKey(getCellText(cell)));
+      if (key) columnKeyByNumber.set(colNumber, key);
+    });
+
+    const missingTemplateColumns = BULK_JOB_TEMPLATE_COLUMNS
+      .filter((column) => !Array.from(columnKeyByNumber.values()).includes(column.key))
+      .map((column) => column.header);
+
+    if (missingTemplateColumns.length) {
+      throw new BadRequestError(`Invalid template. Missing columns: ${missingTemplateColumns.join(', ')}`);
+    }
+
+    const parsedRows = [];
+    worksheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return;
+      const item = { rowNumber };
+      let hasValue = false;
+      for (const [colNumber, key] of columnKeyByNumber.entries()) {
+        const cell = row.getCell(colNumber);
+        item[key] = key === 'applicationDeadline' ? getCellDate(cell) || getCellText(cell) : getCellText(cell);
+        if (toSafeString(item[key])) hasValue = true;
+      }
+      if (hasValue) parsedRows.push(item);
+    });
+
+    const jobRows = [];
+    const serialErrors = [];
+
+    for (const row of parsedRows) {
+      const serialText = toSafeString(row.serialNumber);
+      if (serialText.toUpperCase() === 'EX') continue;
+
+      if (!/^\d+$/.test(serialText)) {
+        serialErrors.push({
+          rowNumber: row.rowNumber,
+          message: 'S.No is mandatory and must be a number like 1, 2, 3',
+        });
+        continue;
+      }
+
+      jobRows.push({
+        ...row,
+        serialNumber: Number(serialText),
+      });
+    }
+
+    if (serialErrors.length) {
+      return res.status(400).json({
+        success: false,
+        message: `${serialErrors.length} row(s) have invalid S.No`,
+        createdCount: 0,
+        failedCount: serialErrors.length,
+        createdJobs: [],
+        failedRows: serialErrors,
+      });
+    }
+
+    if (!jobRows.length) {
+      throw new BadRequestError('Excel file does not contain any job rows');
+    }
+
+    const canPostByPlan = await ensureBulkJobPlanLimit(req, res, employerId, jobRows.length);
+    if (!canPostByPlan) return;
+
+    const createdJobs = [];
+    const failedRows = [];
+    const companyProfileDoc = await resolveBulkCompanyProfile({ employerId });
+
+    for (const row of jobRows) {
+      try {
+        const payload = buildBulkJobPayload(row, companyProfileDoc, req);
+        const jobPost = await createJobPostFromPayload({
+          payload,
+          employerId,
+          userRole,
+          actorId: req.user.id,
+        });
+        createdJobs.push({
+          rowNumber: row.rowNumber,
+          id: jobPost._id,
+          jobId: jobPost.jobId,
+          title: jobPost.title,
+        });
+      } catch (error) {
+        failedRows.push({
+          rowNumber: row.rowNumber,
+          message: error.message || 'Failed to create job',
+        });
+      }
+    }
+
+    const status = createdJobs.length && failedRows.length ? 207 : createdJobs.length ? 201 : 400;
+    return res.status(status).json({
+      success: createdJobs.length > 0 && failedRows.length === 0,
+      partialSuccess: createdJobs.length > 0 && failedRows.length > 0,
+      message: failedRows.length
+        ? `${createdJobs.length} job(s) uploaded, ${failedRows.length} row(s) failed`
+        : `${createdJobs.length} job(s) uploaded successfully`,
+      createdCount: createdJobs.length,
+      failedCount: failedRows.length,
+      createdJobs,
+      failedRows,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 /**
  * Creates a new job post for an authenticated employer
  * @param {Object} req - Request object containing job post data
@@ -435,7 +1160,7 @@ jobsController.createJobPost = async (req, res, next) => {
      * superadmin   → must pass employerId
      */
 
-    let employerId = loggedInUserId;
+    let employerId = userRole === 'employer' ? getEffectiveEmployerId(req.user) : loggedInUserId;
 
     // For hr-admin and superadmin, employerId must be provided in body
     if (['hr-admin', 'superadmin'].includes(userRole)) {
@@ -582,6 +1307,8 @@ jobsController.createJobPost = async (req, res, next) => {
       }
     }
 
+    const isPostedByAdmin = ['hr-admin', 'superadmin'].includes(userRole);
+
     // Create new job post
     const newJobPost = new JobPost({
       jobId: await generateUniqueJobId(),
@@ -625,6 +1352,9 @@ jobsController.createJobPost = async (req, res, next) => {
             closedByRole: ['employer', 'hr-admin', 'superadmin'].includes(userRole) ? userRole : 'system',
           }
         : {}),
+      status: isPostedByAdmin ? 'Draft' : 'Published',
+      jobApprovalStatus: isPostedByAdmin ? 'pending' : 'not_required',
+      jobApprovalRequestedAt: isPostedByAdmin ? new Date() : null,
     });
 
     await newJobPost.save();
@@ -805,8 +1535,8 @@ jobsController.createJobPost = async (req, res, next) => {
         if (selectedEmployer?._id) {
           const employerNotificationPayload = {
             ...notificationPresets.emailUpdate(
-              'New Job Posted by Coimbatore Jobs',
-              `Coimbatore Jobs administration posted "${newJobPost.title}" on behalf of ${companyProfileDoc.companyName}.`
+              'Job Approval Required',
+              `Coimbatore Jobs administration prepared "${newJobPost.title}" for ${companyProfileDoc.companyName}. Please accept or ignore it in Manage Jobs.`
             ),
             jobPost: newJobPost._id,
             actionUrl: '/employers-dashboard/manage-jobs',
@@ -817,7 +1547,7 @@ jobsController.createJobPost = async (req, res, next) => {
             body: employerNotificationPayload.description,
             link: `${process.env.FRONTEND_URL}/employers-dashboard/manage-jobs`,
             data: {
-              type: 'job_posted_by_admin',
+              type: 'job_approval_required',
               jobPostId: newJobPost._id,
               actionUrl: employerNotificationPayload.actionUrl,
             },
@@ -832,7 +1562,9 @@ jobsController.createJobPost = async (req, res, next) => {
 
     return res.status(201).json({
       success: true,
-      message: 'Job post created successfully',
+      message: isPostedByAdmin
+        ? 'Job post created and sent to employer for approval'
+        : 'Job post created successfully',
       jobPost: newJobPost,
     });
   } catch (error) {
@@ -930,12 +1662,14 @@ jobsController.getJobPosts = async (req, res, next) => {
     // Query and populate related company profile (only name and logo)
     const jobPosts = await JobPost.find(query)
       .populate('companyProfile', 'companyName logo email publicPhone phone')
+      .populate('employer', 'name role email')
+      .populate('postedBy', 'name role email')
       .populate('functionalAreas', 'name slug')
       .populate('industry', 'name slug')
       .populate('role', 'name slug defaultCollarCategory')
       .populate('skills', 'name')
-      .select('employer companyProfile title location applicantCount status closedAt closedBy closedByRole candidateSelectionSource candidateSelectionSourceUpdatedAt candidateSelectionSourceUpdatedBy createdAt applicationDeadline postedBy slug salary offeredSalary')
-      .select('jobId employer companyProfile title location applicantCount status closedAt closedBy closedByRole candidateSelectionSource candidateSelectionSourceUpdatedAt candidateSelectionSourceUpdatedBy createdAt applicationDeadline postedBy')
+      .select('employer companyProfile title location applicantCount status jobApprovalStatus jobApprovalRequestedAt jobApprovalRespondedAt jobApprovalRespondedBy closedAt closedBy closedByRole candidateSelectionSource candidateSelectionSourceUpdatedAt candidateSelectionSourceUpdatedBy createdAt applicationDeadline postedBy slug salary offeredSalary')
+      .select('jobId employer companyProfile title location applicantCount status jobApprovalStatus jobApprovalRequestedAt jobApprovalRespondedAt jobApprovalRespondedBy closedAt closedBy closedByRole candidateSelectionSource candidateSelectionSourceUpdatedAt candidateSelectionSourceUpdatedBy createdAt applicationDeadline postedBy')
       .sort({ createdAt: -1 });  // Most recent first
     await ensureJobIds(jobPosts);
 
@@ -976,6 +1710,28 @@ jobsController.getJobPosts = async (req, res, next) => {
       downloadUsageAgg.map((item) => [String(item._id), Number(item.downloadsUsed || 0)])
     );
 
+    const applicationReleaseAgg = filteredJobIds.length
+      ? await Application.aggregate([
+          { $match: { jobPost: { $in: filteredJobIds } } },
+          {
+            $group: {
+              _id: '$jobPost',
+              totalApplications: { $sum: 1 },
+              releasedApplications: {
+                $sum: { $cond: [{ $eq: ['$releasedToEmployer', true] }, 1, 0] },
+              },
+              pendingReleaseApplications: {
+                $sum: { $cond: [{ $eq: ['$releasedToEmployer', true] }, 0, 1] },
+              },
+            },
+          },
+        ])
+      : [];
+
+    const applicationReleaseMap = new Map(
+      applicationReleaseAgg.map((item) => [String(item._id), item])
+    );
+
     let employerResumeUsage = null;
     let employerResumeFeature = {
       enabled: true,
@@ -994,9 +1750,24 @@ jobsController.getJobPosts = async (req, res, next) => {
       const downloadsUsed = employerResumeUsage?.total ?? jobDownloadsUsed;
       const limit = employerResumeFeature.limit;
       const jobWithCurrentCollar = applyCurrentRoleCollarCategory(job);
+      const releaseStats = applicationReleaseMap.get(String(job._id)) || {};
+      const totalApplications = Number(releaseStats.totalApplications || 0);
+      const releasedApplications = Number(releaseStats.releasedApplications || 0);
+      const pendingReleaseApplications = Number(releaseStats.pendingReleaseApplications || 0);
+      const visibleApplicationCount = userRole === 'employer'
+        ? releasedApplications
+        : (Number(jobWithCurrentCollar.applicantCount || 0) || totalApplications);
 
       return {
         ...jobWithCurrentCollar,
+        applicantCount: visibleApplicationCount,
+        totalApplications,
+        releasedApplications,
+        pendingReleaseApplications: userRole === 'employer' ? 0 : pendingReleaseApplications,
+        canEmployerApproveJob:
+          userRole === 'employer' &&
+          jobWithCurrentCollar.jobApprovalStatus === 'pending' &&
+          String(jobWithCurrentCollar.employer || '') === String(userId),
         resumeDownloadUsage: {
           used: downloadsUsed,
           limit,
@@ -1190,6 +1961,13 @@ jobsController.getJobPost = async (req, res, next) => {
       'updatedAt',
     ].join(' ');
 
+    const PRIVATE_JOB_FIELDS = [
+      'employer',
+      'postedBy',
+      'contactEmail',
+      'contactUsername',
+    ].join(' ');
+
     const jobPost = await JobPost.findOne(query)
       .populate({
         path: 'companyProfile',
@@ -1200,7 +1978,7 @@ jobsController.getJobPost = async (req, res, next) => {
       .populate('industry', 'name slug')
       .populate('role', 'name slug defaultCollarCategory')
       .populate('skills', 'name')
-      .select(PUBLIC_JOB_FIELDS);
+      .select(`${PUBLIC_JOB_FIELDS} ${PRIVATE_JOB_FIELDS}`);
 
     if (!jobPost) {
       throw new NotFoundError('Job post not found');
@@ -1213,6 +1991,21 @@ jobsController.getJobPost = async (req, res, next) => {
     // }
 
     const jobPostData = applyCurrentRoleCollarCategory(jobPost);
+    const canViewPrivateFields = Boolean(
+      user &&
+      (
+        ['hr-admin', 'superadmin'].includes(user.role) ||
+        String(jobPostData.employer || '') === String(user.id || '') ||
+        String(jobPostData.postedBy || '') === String(user.id || '')
+      )
+    );
+
+    if (!canViewPrivateFields) {
+      delete jobPostData.contactEmail;
+      delete jobPostData.contactUsername;
+    }
+    delete jobPostData.employer;
+    delete jobPostData.postedBy;
 
     return res.status(200).json({
       success: true,
@@ -1293,6 +2086,10 @@ jobsController.updateJobPost = async (req, res, next) => {
      'applicationDeadline', 'remoteWork', 'status', 'maxApplicants', 'collarCategory'].forEach(field => {
       if (req.body[field] !== undefined) updateData[field] = req.body[field];
     });
+
+    if (Object.prototype.hasOwnProperty.call(updateData, 'description')) {
+      updateData.description = sanitizeJobDescriptionHtml(updateData.description);
+    }
 
     // Structured salary update (independent of offeredSalary). Setting salary to
     // null/empty clears it; a valid object replaces it; omitting leaves it as-is.
@@ -1482,6 +2279,73 @@ jobsController.updateJobPost = async (req, res, next) => {
     return res.status(200).json({
       success: true,
       message: 'Job post updated successfully',
+      jobPost: updatedJobPost,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+jobsController.respondToAdminPostedJob = async (req, res, next) => {
+  try {
+    const { id: userId, role: userRole } = req.user;
+    const { id: jobPostId } = req.params;
+    const { action } = req.body;
+
+    if (userRole !== 'employer') {
+      throw new ForbiddenError('Only the employer can respond to this job approval request');
+    }
+
+    if (!['accept', 'ignore'].includes(action)) {
+      throw new BadRequestError('Invalid approval action');
+    }
+
+    const jobPost = await JobPost.findById(jobPostId);
+    if (!jobPost) {
+      throw new NotFoundError('Job post not found');
+    }
+
+    if (String(jobPost.employer) !== String(userId)) {
+      throw new ForbiddenError('You do not have permission to approve this job post');
+    }
+
+    if (jobPost.jobApprovalStatus !== 'pending') {
+      throw new BadRequestError('This job post approval request has already been handled');
+    }
+
+    const updateData = {
+      jobApprovalStatus: action === 'accept' ? 'accepted' : 'ignored',
+      jobApprovalRespondedAt: new Date(),
+      jobApprovalRespondedBy: userId,
+    };
+
+    if (action === 'accept') {
+      updateData.status = 'Published';
+      updateData.closedAt = null;
+      updateData.closedBy = null;
+      updateData.closedByRole = null;
+    } else {
+      updateData.status = 'Draft';
+    }
+
+    const updatedJobPost = await JobPost.findByIdAndUpdate(
+      jobPostId,
+      { $set: updateData },
+      { new: true, runValidators: true }
+    )
+      .populate('companyProfile', 'companyName logo email publicPhone phone')
+      .populate('functionalAreas', 'name slug')
+      .populate('industry', 'name slug')
+      .populate('role', 'name slug defaultCollarCategory')
+      .populate('skills', 'name');
+
+    await ensureJobId(updatedJobPost);
+
+    return res.status(200).json({
+      success: true,
+      message: action === 'accept'
+        ? 'Job post approved and published successfully'
+        : 'Job post ignored successfully',
       jobPost: updatedJobPost,
     });
   } catch (error) {

@@ -7,9 +7,9 @@ import User from '../models/user.model.js';
 import EmployerResumeDownloadLog from '../models/employerResumeDownloadLog.model.js';
 import CandidateEmployerActivity from '../models/candidateEmployerActivity.model.js';
 import { HeadObjectCommand } from "@aws-sdk/client-s3";
-import { canManageJob, buildJobQueryForUser } from '../utils/roleHelper.js';
+import { canManageJob, buildJobQueryForUser, getEffectiveEmployerId } from '../utils/roleHelper.js';
 import { BadRequestError, NotFoundError, ForbiddenError } from '../utils/errors.js';
-import { sendApplicationStatusUpdateEmail } from '../utils/mailer.js';
+import { sendApplicationStatusUpdateEmail, sendEmployerApplicantsReleasedEmail } from '../utils/mailer.js';
 import { createNotification, notificationPresets } from '../utils/notificationHelper.js';
 import { sendPushToUsers } from '../utils/fcm.js';
 import { getPrivateFileUrl } from '../utils/s3SignedUrl.js';
@@ -22,6 +22,21 @@ import {
 } from '../utils/employerPlanAccess.js';
 
 const employerApplicantsController = {};
+
+const isAdminUser = (user) => ['hr-admin', 'sub-admin', 'superadmin'].includes(user?.role);
+
+const applyEmployerReleaseGate = (query, user) => {
+  if (user?.role === 'employer') {
+    query.releasedToEmployer = true;
+  }
+  return query;
+};
+
+const ensureEmployerCanAccessApplication = (application, user) => {
+  if (user?.role === 'employer' && !application?.releasedToEmployer) {
+    throw new ForbiddenError('This application is waiting for admin approval');
+  }
+};
 
 const MONTHLY_RESUME_LIMIT = 5;
 
@@ -280,7 +295,7 @@ const buildApplicantCompanyNameMaps = async (applicants = []) => {
  */
 employerApplicantsController.getApplicantsByJob = async (req, res, next) => {
   try {
-    const employerId = req.user.id;
+    const employerId = getEffectiveEmployerId(req.user);
     const jobId = req.params.jobId;
     const {
       status,
@@ -310,7 +325,7 @@ employerApplicantsController.getApplicantsByJob = async (req, res, next) => {
     }
 
     //  Build initial match query
-    const matchQuery = { jobPost: new mongoose.Types.ObjectId(jobId) };
+    const matchQuery = applyEmployerReleaseGate({ jobPost: new mongoose.Types.ObjectId(jobId) }, req.user);
     
     // Filter by status if provided
     if (status && status !== "All") {
@@ -514,7 +529,7 @@ employerApplicantsController.getAllApplicants = async (req, res, next) => {
 
     const allowedJobIds = jobs.map((j) => j._id.toString());
 
-    const matchQuery = { jobPost: { $in: jobs.map(j => j._id) } };
+    const matchQuery = applyEmployerReleaseGate({ jobPost: { $in: jobs.map(j => j._id) } }, req.user);
 
     // Optional single job filter
     if (jobId) {
@@ -725,9 +740,9 @@ employerApplicantsController.getHrAdminEmployersApplicants = async (req, res, ne
     // Build application match query
     const allowedJobIds = jobs.map((j) => j._id.toString());
 
-    const matchQuery = {
+    const matchQuery = applyEmployerReleaseGate({
       jobPost: { $in: jobs.map(j => j._id) },
-    };
+    }, req.user);
 
     if (jobId) {
       if (!mongoose.Types.ObjectId.isValid(jobId)) {
@@ -876,7 +891,7 @@ employerApplicantsController.getHrAdminEmployersApplicants = async (req, res, ne
  */
 employerApplicantsController.updateApplicantStatus = async (req, res, next) => {
   try {
-    const employerId = req.user.id;
+    const employerId = getEffectiveEmployerId(req.user);
     const applicationId = req.params.applicationId;
     const { status } = req.body; // 'Reviewed', 'Accepted', 'Rejected'
 
@@ -895,6 +910,7 @@ employerApplicantsController.updateApplicantStatus = async (req, res, next) => {
     if (!application || !canManageJob(application.jobPost, req.user)) {
       throw new ForbiddenError('You do not have permission to update this application');
     }
+    ensureEmployerCanAccessApplication(application, req.user);
 
     application.status = status;
     if (status === 'Accepted') {
@@ -973,7 +989,7 @@ employerApplicantsController.updateApplicantStatus = async (req, res, next) => {
  */
 employerApplicantsController.deleteApplicant = async (req, res, next) => {
   try {
-    const employerId = req.user.id;
+    const employerId = getEffectiveEmployerId(req.user);
     const applicationId = req.params.applicationId;
 
     const application = await Application.findById(applicationId).populate('jobPost');
@@ -984,6 +1000,7 @@ employerApplicantsController.deleteApplicant = async (req, res, next) => {
     if (!canManageJob(application.jobPost, req.user)) {
       throw new ForbiddenError('Permission denied');
     }
+    ensureEmployerCanAccessApplication(application, req.user);
 
 
     await application.deleteOne();
@@ -1005,7 +1022,7 @@ employerApplicantsController.deleteApplicant = async (req, res, next) => {
  */
 employerApplicantsController.viewApplicant = async (req, res, next) => {
   try {
-    const employerId = req.user.id;
+    const employerId = getEffectiveEmployerId(req.user);
     const applicationId = req.params.applicationId;
 
     const application = await Application.findById(applicationId)
@@ -1049,6 +1066,7 @@ employerApplicantsController.viewApplicant = async (req, res, next) => {
         message: 'Permission denied'
       });
     }
+    ensureEmployerCanAccessApplication(application, req.user);
 
 
     return res.status(200).json({
@@ -1118,6 +1136,7 @@ employerApplicantsController.downloadApplicantResume = async (req, res, next) =>
         message: 'Permission denied',
       });
     }
+    ensureEmployerCanAccessApplication(application, user);
 
     const resumeValue = await resolveApplicationResumeValue(application);
     if (!resumeValue) {
@@ -1193,7 +1212,7 @@ employerApplicantsController.downloadApplicantResume = async (req, res, next) =>
  */
 employerApplicantsController.bulkUpdateStatus = async (req, res, next) => {
   try {
-    const employerId = req.user.id;
+    const employerId = getEffectiveEmployerId(req.user);
     const { applicationIds, status } = req.body;
 
     if (!Array.isArray(applicationIds) || applicationIds.length === 0) {
@@ -1219,6 +1238,7 @@ employerApplicantsController.bulkUpdateStatus = async (req, res, next) => {
       if (!canManageJob(app.jobPost, req.user)) {
         throw new ForbiddenError('Permission denied for one or more applications');
       }
+      ensureEmployerCanAccessApplication(app, req.user);
     }
 
     const statusUpdate = { status };
@@ -1256,7 +1276,7 @@ employerApplicantsController.bulkUpdateStatus = async (req, res, next) => {
  */
 employerApplicantsController.shortlistApplicant = async (req, res, next) => {
   try {
-    const employerId = req.user.id;
+    const employerId = getEffectiveEmployerId(req.user);
     const applicationId = req.params.applicationId;
 
     const application = await Application.findById(applicationId)
@@ -1279,6 +1299,7 @@ employerApplicantsController.shortlistApplicant = async (req, res, next) => {
     if (!canManageJob(application.jobPost, req.user)) {
       throw new ForbiddenError('Permission denied');
     }
+    ensureEmployerCanAccessApplication(application, req.user);
 
     
     application.shortlisted = true;
@@ -1340,7 +1361,7 @@ employerApplicantsController.shortlistApplicant = async (req, res, next) => {
  */
 employerApplicantsController.unshortlistApplicant = async (req, res, next) => {
   try {
-    const employerId = req.user.id;
+    const employerId = getEffectiveEmployerId(req.user);
     const applicationId = req.params.applicationId;
 
     const application = await Application.findById(applicationId).populate('jobPost');
@@ -1356,6 +1377,7 @@ employerApplicantsController.unshortlistApplicant = async (req, res, next) => {
     if (!canManageJob(application.jobPost, req.user)) {
       throw new ForbiddenError('Permission denied');
     }
+    ensureEmployerCanAccessApplication(application, req.user);
 
 
     application.shortlisted = false;
@@ -1365,6 +1387,112 @@ employerApplicantsController.unshortlistApplicant = async (req, res, next) => {
       success: true,
       message: 'Applicant removed from shortlist',
       application,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+employerApplicantsController.releaseJobApplicantsToEmployer = async (req, res, next) => {
+  try {
+    if (!isAdminUser(req.user)) {
+      throw new ForbiddenError('Only admins can release applicants to employers');
+    }
+
+    const { jobId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(jobId)) {
+      throw new BadRequestError('Invalid job id');
+    }
+
+    const jobPost = await JobPost.findById(jobId)
+      .populate('companyProfile', 'companyName email')
+      .populate('employer', 'name email contactEmail isSystemGeneratedEmail');
+
+    if (!jobPost) {
+      throw new NotFoundError('Job post not found');
+    }
+
+    if (!canManageJob(jobPost, req.user)) {
+      throw new ForbiddenError('You do not have permission to release applicants for this job');
+    }
+
+    const unreleasedQuery = { jobPost: jobPost._id, releasedToEmployer: { $ne: true } };
+    const pendingReleaseCount = await Application.countDocuments(unreleasedQuery);
+
+    if (pendingReleaseCount === 0) {
+      const totalReleasedCount = await Application.countDocuments({
+        jobPost: jobPost._id,
+        releasedToEmployer: true,
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: 'No pending applicants to release',
+        releasedCount: 0,
+        totalReleasedCount,
+      });
+    }
+
+    await Application.updateMany(unreleasedQuery, {
+      $set: {
+        releasedToEmployer: true,
+        releasedAt: new Date(),
+        releasedBy: req.user.id,
+      },
+    });
+
+    const totalReleasedCount = await Application.countDocuments({
+      jobPost: jobPost._id,
+      releasedToEmployer: true,
+    });
+
+    const employer = jobPost.employer;
+    const employerEmail = employer?.isSystemGeneratedEmail
+      ? (employer.contactEmail || jobPost.companyProfile?.email)
+      : (employer?.email || employer?.contactEmail || jobPost.companyProfile?.email);
+
+    const dashboardLink = `${process.env.FRONTEND_URL}/employers-dashboard/all-applicants?jobId=${jobPost._id}`;
+
+    if (employerEmail) {
+      await sendEmployerApplicantsReleasedEmail({
+        employerEmail,
+        employerName: employer?.name || jobPost.companyProfile?.companyName || 'Employer',
+        jobTitle: jobPost.title,
+        companyName: jobPost.companyProfile?.companyName || 'Company',
+        releasedCount: pendingReleaseCount,
+        totalReleasedCount,
+        dashboardLink,
+      });
+    }
+
+    if (employer?._id) {
+      const notificationPayload = {
+        ...notificationPresets.emailUpdate(
+          'Applicants Ready to Review',
+          `${totalReleasedCount} candidates are now available for ${jobPost.title}.`
+        ),
+        jobPost: jobPost._id,
+        actionUrl: '/employers-dashboard/all-applicants',
+      };
+
+      await createNotification(employer._id, 'email_update', notificationPayload);
+      await sendPushToUsers([employer._id], {
+        title: notificationPayload.title,
+        body: notificationPayload.description,
+        link: `${process.env.FRONTEND_URL}${notificationPayload.actionUrl}`,
+        data: {
+          type: 'job_applicants_released',
+          jobPostId: String(jobPost._id),
+          actionUrl: notificationPayload.actionUrl,
+        },
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `${pendingReleaseCount} applicants released to employer`,
+      releasedCount: pendingReleaseCount,
+      totalReleasedCount,
     });
   } catch (error) {
     next(error);
@@ -1391,7 +1519,7 @@ employerApplicantsController.getShortlistedResumes = async (req, res, next) => {
     } = req.query;
     const sortDirection = appliedDateSort === 'oldest' ? 1 : -1;
 
-    let query = { shortlisted: true };
+    let query = applyEmployerReleaseGate({ shortlisted: true }, user);
 
     // --------------------------------------------------
     // Job ownership handling (Employer / HR-Admin / Superadmin)
