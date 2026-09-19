@@ -65,7 +65,7 @@ app.use(cors({
 // Security middleware (e.g., XSS protection)
 // app.use(helmet());
 // app.use(mongoSanitize());
-app.use(express.json({ limit: '10kb' }));
+app.use(express.json({ limit: '1mb' }));
 
 // Serve static files
 app.use(express.static('public'));
@@ -103,7 +103,7 @@ app.use('/uploads/company', (req, res, next) => {
 // app.use('/api', limiter);
 
 // middleware
-app.use(express.json()); // for parsing application/json
+app.use(express.json({ limit: '1mb' })); // for parsing application/json
 app.use(urlencoded({ extended: true })); // for parsing application/x-www-form-urlencoded
 // app.use(cookieParser()); // for parsing cookies
 

@@ -143,8 +143,9 @@ candidateResumeController.createResume = async (req, res, next) => {
 
         // Limit resumes per candidate (e.g., max 5)
         const resumeCount = await CandidateResume.countDocuments({ candidate: candidateId });
-        if (resumeCount >= (req.user.subscription?.resumeLimit || 2)) {
-            throw new BadRequestError(`Maximum ${req.user.subscription?.resumeLimit || 2} resumes allowed per candidate`);
+        const resumeLimit = req.user.subscription?.resumeLimit || 20;
+        if (resumeCount >= resumeLimit) {
+            throw new BadRequestError(`Maximum ${resumeLimit} resumes allowed per candidate`);
         }
 
         // Handle portfolio uploads
