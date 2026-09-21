@@ -424,12 +424,16 @@ export const parseJobQuery = (query = {}) => {
  * `status: 'Published'` is applied LAST and unconditionally so no user input
  * can widen visibility.
  *
- * DELIBERATELY ABSENT: any applicationDeadline condition. The legacy path has
- * never filtered expired jobs (only the sitemap feed does), so adding an expiry
- * filter here would silently shrink every result count relative to today's
- * behaviour. That inconsistency is pre-existing and is preserved on purpose.
+ * LIVE INVENTORY ONLY: `applicationDeadline >= now` is applied alongside the
+ * status gate. Expired jobs are noindex detail pages and are withdrawn from
+ * Google by the expiry sweep, so listing (and counting) them on the SEO hub and
+ * landing pages contradicted both. This matches the sitemap feed's eligibility
+ * rule. The LEGACY path (no trigger parameter) is unchanged and still returns
+ * every Published job — its consumers depend on the complete list.
+ *
+ * `now` is injectable so tests can pin the clock.
  */
-export const buildJobFilter = (parsed = {}, resolved = {}) => {
+export const buildJobFilter = (parsed = {}, resolved = {}, { now = new Date() } = {}) => {
   const filter = {};
 
   if (parsed.q) {
@@ -511,6 +515,7 @@ export const buildJobFilter = (parsed = {}, resolved = {}) => {
   }
 
   filter.status = 'Published';
+  filter.applicationDeadline = { $gte: now };
 
   return filter;
 };

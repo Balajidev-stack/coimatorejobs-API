@@ -1,5 +1,6 @@
 import { Router } from "express";
 import candidateController from "../controller/candidate.controller.js";
+import jobHubController from '../controller/jobHub.controller.js';
 import candidateCvController from '../controller/candidateCv.controller.js';
 import candidateResumeController from '../controller/candidateResume.controller.js';
 import candidateDashboardController from '../controller/candidateDashboard.controller.js';
@@ -41,6 +42,9 @@ candidateRouter.get('/candidate-profile/pending', authenticate, authorize(['hr-a
 
 // View all job posts (public for guests/candidates; employer access can be plan-gated)
 candidateRouter.get('/jobs', optionalAuthenticate, candidateController.getAllJobPosts);
+
+// Public internal-linking summary for the /jobs-in-coimbatore SEO hub (live jobs only).
+candidateRouter.get('/jobs/hub', jobHubController.getHubSummary);
 
 // Apply to a job (with optional resume upload)
 candidateRouter.post('/jobs/apply/:jobId', authenticate, authorize(['candidate']), candidateUpload, candidateController.applyToJob);

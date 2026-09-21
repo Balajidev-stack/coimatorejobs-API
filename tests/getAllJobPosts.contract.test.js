@@ -212,8 +212,18 @@ test('filtered: filters reach the Mongo query and status stays Published', async
   assert.equal(record.filter.remoteWork, 'Remote');
   assert.deepEqual(record.filter.experienceMin, { $lte: 5 });
   assert.deepEqual(record.filter.experienceMax, { $gte: 2 });
-  assert.equal('applicationDeadline' in record.filter, false, 'expiry semantics preserved');
+  assert.ok(record.filter.applicationDeadline?.$gte instanceof Date, 'filtered path lists live jobs only');
   assert.deepEqual(record.countFilter, record.filter, 'count uses the same filter as find');
+});
+
+test('filtered: response declares live-only scope so counts can be trusted', async () => {
+  const { res } = await invoke({ page: '1' }, [], 0);
+  assert.deepEqual(res.body.scope, { liveOnly: true });
+});
+
+test('legacy: expired jobs are NOT filtered on the legacy path', async () => {
+  const { record } = await invoke({}, SAMPLE);
+  assert.equal('applicationDeadline' in record.filter, false);
 });
 
 test('filtered: out-of-range page returns 200 with an empty list, never 404', async () => {

@@ -95,6 +95,13 @@ const BULK_JOB_SAMPLE_ROW = {
   jobStatus: 'Published',
 };
 
+// Google's default Indexing API quota is 200 publish requests per day for the
+// whole project, and the service has no queue. One bulk upload may announce at
+// most this many new live jobs, leaving the rest of the day's quota for ordinary
+// create / update / close traffic. Jobs beyond the cap are logged, stay in the
+// sitemap, and can be submitted later with POST /api/v1/indexing/reindex.
+const BULK_INDEXING_NOTIFY_LIMIT = 100;
+
 const buildJobId = () =>
   `${JOB_ID_PREFIX}-${crypto.randomInt(10000000, 100000000)}`;
 
@@ -820,7 +827,55 @@ const buildBulkJobPayload = (row, companyProfileDoc, req) => {
     collarCategory: toSafeString(row.collarCategory),
     skills: splitBulkValues(row.skills),
     functionalAreas: splitBulkValues(row.functionalAreas),
+    // The template's "Job Status" column. Validated in createJobPostFromPayload.
+    status: toSafeString(row.jobStatus),
     postedBy: req.user.id,
+  };
+};
+
+const JOB_STATUSES = JobPost.schema.path('status').enumValues;
+
+/**
+ * Validates a requested job status. Blank keeps the historical default,
+ * Published; matching is case-insensitive so spreadsheet input such as "draft"
+ * works. Anything else is rejected.
+ */
+const normalizeRequestedJobStatus = (value) => {
+  const text = toSafeString(value);
+  if (!text) return 'Published';
+
+  const status = JOB_STATUSES.find((candidate) => candidate.toLowerCase() === text.toLowerCase());
+  if (!status) {
+    throw new BadRequestError(`status must be one of: ${JOB_STATUSES.join(', ')}`);
+  }
+  return status;
+};
+
+/**
+ * Lifecycle fields for a NEW job, shared by the single-job and bulk create
+ * paths so the two cannot disagree. Produces ONE authoritative status:
+ *
+ *   admin-posted (hr-admin / superadmin) -> Draft awaiting the employer's
+ *     approval, whatever was requested; respondToAdminPostedJob publishes it
+ *   employer-posted                      -> the requested status
+ *
+ * A Closed job also records who closed it, mirroring updateJobPost.
+ */
+const buildNewJobLifecycleFields = ({ requestedStatus, userRole, actorId }) => {
+  const isPostedByAdmin = ['hr-admin', 'superadmin'].includes(userRole);
+  const status = isPostedByAdmin ? 'Draft' : requestedStatus;
+
+  return {
+    status,
+    ...(status === 'Closed'
+      ? {
+          closedAt: new Date(),
+          closedBy: actorId,
+          closedByRole: ['employer', 'hr-admin', 'superadmin'].includes(userRole) ? userRole : 'system',
+        }
+      : {}),
+    jobApprovalStatus: isPostedByAdmin ? 'pending' : 'not_required',
+    jobApprovalRequestedAt: isPostedByAdmin ? new Date() : null,
   };
 };
 
@@ -860,6 +915,9 @@ const createJobPostFromPayload = async ({ payload, employerId, userRole, actorId
     throw new BadRequestError(`Missing required fields: ${missingFields.join(', ')}`);
   }
 
+  // Validated before taxonomy resolution, which can create master records.
+  const requestedStatus = normalizeRequestedJobStatus(payload.status);
+
   const normalizedContactEmail = normalizeEmail(contactEmail);
   if (!isValidEmailAddress(normalizedContactEmail)) {
     throw new BadRequestError('Please enter a valid contact email address');
@@ -888,7 +946,6 @@ const createJobPostFromPayload = async ({ payload, employerId, userRole, actorId
   }
 
   const normalizedSalary = normalizeSalaryInput(salary);
-  const isPostedByAdmin = ['hr-admin', 'superadmin'].includes(userRole);
 
   const newJobPost = new JobPost({
     jobId: await generateUniqueJobId(),
@@ -923,9 +980,7 @@ const createJobPostFromPayload = async ({ payload, employerId, userRole, actorId
       remaining: Number(positions.total),
     },
     remoteWork: remoteWork || 'On-site',
-    status: isPostedByAdmin ? 'Draft' : 'Published',
-    jobApprovalStatus: isPostedByAdmin ? 'pending' : 'not_required',
-    jobApprovalRequestedAt: isPostedByAdmin ? new Date() : null,
+    ...buildNewJobLifecycleFields({ requestedStatus, userRole, actorId }),
   });
 
   await newJobPost.save();
@@ -1097,6 +1152,7 @@ jobsController.bulkUploadJobPosts = async (req, res, next) => {
     if (!canPostByPlan) return;
 
     const createdJobs = [];
+    const createdJobPosts = [];
     const failedRows = [];
     const companyProfileDoc = await resolveBulkCompanyProfile({ employerId });
 
@@ -1109,6 +1165,7 @@ jobsController.bulkUploadJobPosts = async (req, res, next) => {
           userRole,
           actorId: req.user.id,
         });
+        createdJobPosts.push(jobPost);
         createdJobs.push({
           rowNumber: row.rowNumber,
           id: jobPost._id,
@@ -1121,6 +1178,24 @@ jobsController.bulkUploadJobPosts = async (req, res, next) => {
           message: error.message || 'Failed to create job',
         });
       }
+    }
+
+    // Every row has now been saved or has failed. Announce only jobs that were
+    // actually persisted AND are live public pages: failed rows never reach this
+    // list, and admin uploads (Drafts awaiting approval), Draft / Closed rows and
+    // past-deadline rows are skipped. Fire-and-forget through the existing
+    // helper, so a Google outage cannot fail the upload.
+    const liveJobPosts = createdJobPosts.filter((jobPost) => isPubliclyIndexable(jobPost));
+    liveJobPosts
+      .slice(0, BULK_INDEXING_NOTIFY_LIMIT)
+      .forEach((jobPost) => notifyJobPublished(jobPost, 'bulk-upload'));
+
+    if (liveJobPosts.length > BULK_INDEXING_NOTIFY_LIMIT) {
+      console.warn(
+        `[INDEXING] Bulk upload created ${liveJobPosts.length} live job(s); URL_UPDATED sent for the first ` +
+        `${BULK_INDEXING_NOTIFY_LIMIT} only (Indexing API quota). The rest remain in the sitemap and can be ` +
+        'submitted with POST /api/v1/indexing/reindex.'
+      );
     }
 
     const status = createdJobs.length && failedRows.length ? 207 : createdJobs.length ? 201 : 400;
@@ -1229,14 +1304,7 @@ jobsController.createJobPost = async (req, res, next) => {
     // Respect the requested lifecycle status (the post-job forms offer Draft /
     // Published / Closed); omitting it keeps the historical default, Published.
     // Validated here, before taxonomy resolution, which can create master records.
-    const allowedStatuses = JobPost.schema.path('status').enumValues;
-    const requestedStatus =
-      req.body.status === undefined || req.body.status === null || req.body.status === ''
-        ? 'Published'
-        : String(req.body.status);
-    if (!allowedStatuses.includes(requestedStatus)) {
-      throw new BadRequestError(`status must be one of: ${allowedStatuses.join(', ')}`);
-    }
+    const requestedStatus = normalizeRequestedJobStatus(req.body.status);
 
     const normalizedContactEmail = normalizeEmail(contactEmail);
     if (!isValidEmailAddress(normalizedContactEmail)) {
@@ -1344,17 +1412,9 @@ jobsController.createJobPost = async (req, res, next) => {
         remaining: Number(positions.total),
       },
       remoteWork: remoteWork || 'On-site', // Default to On-site
-      status: requestedStatus, // Validated above; defaults to Published
-      ...(requestedStatus === 'Closed'
-        ? {
-            closedAt: new Date(),
-            closedBy: req.user.id,
-            closedByRole: ['employer', 'hr-admin', 'superadmin'].includes(userRole) ? userRole : 'system',
-          }
-        : {}),
-      status: isPostedByAdmin ? 'Draft' : 'Published',
-      jobApprovalStatus: isPostedByAdmin ? 'pending' : 'not_required',
-      jobApprovalRequestedAt: isPostedByAdmin ? new Date() : null,
+      // ONE authoritative status: admin posts start as a Draft awaiting employer
+      // approval; employers get the status they requested.
+      ...buildNewJobLifecycleFields({ requestedStatus, userRole, actorId: req.user.id }),
     });
 
     await newJobPost.save();
@@ -2313,6 +2373,10 @@ jobsController.respondToAdminPostedJob = async (req, res, next) => {
       throw new BadRequestError('This job post approval request has already been handled');
     }
 
+    // Public state BEFORE the response, so an 'ignore' can withdraw a page an
+    // admin had already made live.
+    const wasPubliclyIndexable = isPubliclyIndexable(jobPost);
+
     const updateData = {
       jobApprovalStatus: action === 'accept' ? 'accepted' : 'ignored',
       jobApprovalRespondedAt: new Date(),
@@ -2340,6 +2404,19 @@ jobsController.respondToAdminPostedJob = async (req, res, next) => {
       .populate('skills', 'name');
 
     await ensureJobId(updatedJobPost);
+
+    // Google is told only after the update has persisted. The pending-status
+    // guard above lets each request be answered once, so this runs once.
+    if (updatedJobPost) {
+      if (action === 'accept') {
+        // Self-skips unless the published job is a live public page.
+        notifyJobPublished(updatedJobPost, 'approval');
+      } else {
+        // An ignored job returns to Draft. Withdraws only if Google may hold it;
+        // a pending Draft that was never public sends nothing.
+        notifyJobWithdrawal(jobPost, 'approval', { wasPubliclyIndexable });
+      }
+    }
 
     return res.status(200).json({
       success: true,

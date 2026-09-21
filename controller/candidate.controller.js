@@ -1229,6 +1229,10 @@ candidateController.getAllJobPosts = async (req, res, next) => {
       jobPosts: jobPosts.map((job) => applyCurrentRoleCollarCategory(job)),
       pagination: buildPagination(parsed, total),
       appliedFilters: buildAppliedFilters(parsed, resolved),
+      // Tells the frontend the list and `pagination.total` contain only live
+      // jobs (Published + deadline not passed), so the count is safe to show.
+      // An older API without this key must not have its count displayed.
+      scope: { liveOnly: true },
     });
   } catch (error) {
     next(error);

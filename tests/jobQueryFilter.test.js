@@ -92,6 +92,19 @@ test('operator-injection shapes are inert', () => {
   assert.equal(filter.status, 'Published');
 });
 
+test('buildJobFilter lists live jobs only (deadline not passed)', () => {
+  const now = new Date('2026-09-21T10:00:00Z');
+  const filter = buildJobFilter(parseJobQuery({ page: '1' }), {}, { now });
+  assert.equal(filter.status, 'Published');
+  assert.deepEqual(filter.applicationDeadline, { $gte: now });
+});
+
+test('buildJobFilter live-only rule cannot be widened by user input', () => {
+  const filter = buildJobFilter(parseJobQuery({ applicationDeadline: 'x', status: 'Draft' }), {});
+  assert.equal(filter.status, 'Published');
+  assert.ok(filter.applicationDeadline.$gte instanceof Date);
+});
+
 test('prototype-pollution keys are ignored', () => {
   const parsed = parseJobQuery({ __proto__: { polluted: true }, q: 'safe' });
   assert.equal(parsed.q, 'safe');
@@ -268,12 +281,14 @@ test('status Published is always present', () => {
   }
 });
 
-test('applicationDeadline is NEVER added (expiry semantics preserved)', () => {
+test('applicationDeadline live-only rule is applied alongside every facet', () => {
+  const now = new Date('2026-09-21T00:00:00Z');
   const filter = buildJobFilter(
     parseJobQuery({ q: 'dev', industry: 'it', posted: '7d', sort: 'oldest' }),
     { textTargets: {}, industry: { ids: [oid(1)] } },
+    { now },
   );
-  assert.equal('applicationDeadline' in filter, false);
+  assert.deepEqual(filter.applicationDeadline, { $gte: now });
 });
 
 test('unresolved taxonomy yields an empty $in, not a missing filter', () => {
