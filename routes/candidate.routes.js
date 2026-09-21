@@ -3,6 +3,7 @@ import candidateController from "../controller/candidate.controller.js";
 import jobHubController from '../controller/jobHub.controller.js';
 import candidateCvController from '../controller/candidateCv.controller.js';
 import candidateResumeController from '../controller/candidateResume.controller.js';
+import candidateCoverLetterController from '../controller/candidateCoverLetter.controller.js';
 import candidateDashboardController from '../controller/candidateDashboard.controller.js';
 import notificationController from '../controller/notification.controller.js';
 import { authenticate, authorize, optionalAuthenticate } from "../middleware/auth.js";
@@ -88,6 +89,13 @@ candidateRouter.delete('/resumes/delete/:id', authenticate, authorize(['candidat
 
 // Generate PDF CV
 candidateRouter.get('/resumes/:id/generate-pdf', authenticate, authorize(['candidate']), candidateResumeController.generatePDF);
+
+// Cover letters
+candidateRouter.post('/cover-letters/create', authenticate, authorize(['candidate']), candidateCoverLetterController.createCoverLetter);
+candidateRouter.put('/cover-letters/update/:id', authenticate, authorize(['candidate']), candidateCoverLetterController.updateCoverLetter);
+candidateRouter.get('/cover-letters/get-all', authenticate, authorize(['candidate']), candidateCoverLetterController.listCoverLetters);
+candidateRouter.get('/cover-letters/get/:id', authenticate, authorize(['candidate']), candidateCoverLetterController.getCoverLetter);
+candidateRouter.delete('/cover-letters/delete/:id', authenticate, authorize(['candidate']), candidateCoverLetterController.deleteCoverLetter);
 
 //cv management routes
 // Upload CV file
