@@ -70,7 +70,7 @@ const indexingLogSchema = new mongoose.Schema(
     },
     // What caused the submission: 'create' | 'update' | 'delete' | 'expiry' |
     // 'manual' | 'auto-close' | 'auto-reopen' | 'account-delete' | 'slug-migration' |
-    // 'bulk-upload' | 'approval'
+    // 'bulk-upload' | 'approval' | 'backfill'
     source: {
       type: String,
       default: 'unknown',

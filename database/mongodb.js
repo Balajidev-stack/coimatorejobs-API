@@ -1,6 +1,18 @@
 
+import dns from "node:dns";
 import mongoose from "mongoose";
 import { DB_URI, NODE_ENV } from "../config/env.js";
+
+// OPTIONAL DNS override for mongodb+srv:// lookups. Some local networks refuse
+// the SRV query Node issues (querySrv ECONNREFUSED) even though the same lookup
+// works through a public resolver. Set e.g. DNS_SERVERS=8.8.8.8,1.1.1.1 in the
+// local env file to use those resolvers. Unset (the deployed default) -> the
+// system resolver is used exactly as before.
+const DNS_SERVERS = String(process.env.DNS_SERVERS || "")
+  .split(",")
+  .map((server) => server.trim())
+  .filter(Boolean);
+if (DNS_SERVERS.length) dns.setServers(DNS_SERVERS);
 
 if(!DB_URI) {
   throw new Error("DB_URI is not defined in environment variables or .env<development/production>.local file.");
