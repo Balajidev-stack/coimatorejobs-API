@@ -35,6 +35,8 @@
 // Canonical parameters (the 15 in scope) plus the server-side aliases that are
 // explicitly accepted. No current caller sends any of these to this endpoint,
 // so adding them to the trigger set cannot change existing behaviour.
+import { withOpenPositions } from './jobOpenPositions.js';
+
 export const TRIGGER_PARAMS = Object.freeze([
   'q',
   'industry',
@@ -517,7 +519,8 @@ export const buildJobFilter = (parsed = {}, resolved = {}, { now = new Date() } 
   filter.status = 'Published';
   filter.applicationDeadline = { $gte: now };
 
-  return filter;
+  // Filled jobs ("Applications Closed") are not live inventory either.
+  return withOpenPositions(filter);
 };
 
 /**

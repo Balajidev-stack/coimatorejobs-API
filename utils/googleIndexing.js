@@ -17,6 +17,7 @@
 import { JWT } from 'google-auth-library';
 import IndexingLog from '../models/indexingLog.model.js';
 import { buildPublicJobUrl } from './jobSlug.js';
+import { hasOpenPositions } from './jobOpenPositions.js';
 
 export const INDEXING_SCOPE = 'https://www.googleapis.com/auth/indexing';
 export const PUBLISH_ENDPOINT = 'https://indexing.googleapis.com/v3/urlNotifications:publish';
@@ -160,6 +161,9 @@ export const isPubliclyIndexable = (job, now = new Date()) => {
   if (!String(job.slug ?? '').trim()) return false;
   const deadline = job.applicationDeadline ? new Date(job.applicationDeadline) : null;
   if (!deadline || Number.isNaN(deadline.getTime())) return false;
+  // A filled job renders "Applications Closed" (noindex): not publicly indexable,
+  // so filling the last position withdraws it like an expiry does.
+  if (!hasOpenPositions(job)) return false;
   return deadline.getTime() >= now.getTime();
 };
 

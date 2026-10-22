@@ -19,6 +19,7 @@ import { ForbiddenError, BadRequestError, NotFoundError } from "../utils/errors.
 import { isValidEmailAddress, normalizeEmail } from "../utils/emailValidation.js";
 import { COLLAR_CATEGORIES } from '../models/jobs.model.js';
 import { buildPublicJobPath, buildPublicJobUrl } from '../utils/jobSlug.js';
+import { withOpenPositions } from '../utils/jobOpenPositions.js';
 import {
   isPubliclyIndexable,
   notifyJobPublished,
@@ -2492,11 +2493,12 @@ const paginate = (req) => {
 // No auth, no populate, lean read. Returns all eligible jobs (pagination deferred).
 jobsController.getSitemapJobs = async (req, res, next) => {
   try {
-    const jobs = await JobPost.find({
+    // Filled jobs are noindex "Applications Closed" pages: not sitemap-eligible.
+    const jobs = await JobPost.find(withOpenPositions({
       status: 'Published',
       applicationDeadline: { $gte: new Date() },
       slug: { $exists: true, $nin: [null, ''], $regex: /\S/ }, // reject null/empty/whitespace-only
-    })
+    }))
       .select('slug status createdAt updatedAt applicationDeadline -_id')
       .sort({ updatedAt: -1 })
       .lean();

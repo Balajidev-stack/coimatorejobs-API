@@ -17,6 +17,7 @@ import {
   buildHubSummary,
   compactText,
 } from '../utils/jobHubSummary.js';
+import { withOpenPositions } from '../utils/jobOpenPositions.js';
 
 const CACHE_TTL_MS = 60 * 1000;
 const MAX_CACHE_ENTRIES = 20;
@@ -24,7 +25,7 @@ const MAX_CITY_LENGTH = 60;
 
 /** Default loader: every live job, only the fields the summary needs. */
 const loadLiveJobs = (now) =>
-  JobPost.find({ status: 'Published', applicationDeadline: { $gte: now } })
+  JobPost.find(withOpenPositions({ status: 'Published', applicationDeadline: { $gte: now } }))
     .select('_id status applicationDeadline location industry role')
     .populate('industry', 'name')
     .populate('role', 'name')
