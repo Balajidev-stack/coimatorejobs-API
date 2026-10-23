@@ -66,11 +66,13 @@ const findLiveJobsPage = ({ now, after, pageSize }) => {
  * @param {Object}   [options]
  * @param {number}   [options.limit=100]    Max URL_UPDATED notifications this run.
  * @param {boolean}  [options.dryRun=false] Report what would be sent; send nothing.
+ * @param {string[]} [options.excludeSlugs]  Job slugs never to submit (e.g. test jobs).
  * @returns {Promise<{scanned:number, alreadyAnnounced:number, notLive:number, submitted:number, succeeded:number, failed:number, skipped:number, pending:string[], results:Array}>}
  */
 export const backfillLiveJobs = async ({
   limit = 100,
   dryRun = false,
+  excludeSlugs = [],
   now = new Date(),
   logger = console,
   pageSize = DEFAULT_PAGE_SIZE,
@@ -84,6 +86,7 @@ export const backfillLiveJobs = async ({
     scanned: 0,
     alreadyAnnounced: 0,
     notLive: 0,
+    excluded: 0,
     submitted: 0,
     succeeded: 0,
     failed: 0,
@@ -92,6 +95,7 @@ export const backfillLiveJobs = async ({
     results: [],
   };
 
+  const excluded = new Set(excludeSlugs.map(String));
   const pending = [];
   let after = null;
 
@@ -115,6 +119,10 @@ export const backfillLiveJobs = async ({
       // Same eligibility rule as every other URL_UPDATED path.
       if (!isPubliclyIndexable(entry.job, now)) {
         summary.notLive += 1;
+        continue;
+      }
+      if (excluded.has(String(entry.job.slug))) {
+        summary.excluded += 1;
         continue;
       }
       const { updatedLog = null } = logs.get(entry.url) || {};
@@ -144,7 +152,7 @@ export const backfillLiveJobs = async ({
 
   logger.log?.(
     `[INDEXING_BACKFILL] dryRun=${dryRun} scanned=${summary.scanned} alreadyAnnounced=${summary.alreadyAnnounced} ` +
-    `notLive=${summary.notLive} pending=${pending.length} submitted=${summary.submitted} ` +
+    `notLive=${summary.notLive} excluded=${summary.excluded} pending=${pending.length} submitted=${summary.submitted} ` +
     `succeeded=${summary.succeeded} failed=${summary.failed} skipped=${summary.skipped}`
   );
 

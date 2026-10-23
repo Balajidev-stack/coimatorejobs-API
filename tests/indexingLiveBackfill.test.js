@@ -72,3 +72,9 @@ test('limit caps a run and can never exceed the daily-quota-safe maximum', async
   const huge = await run(many, new Map(), { limit: 10000 });
   assert.equal(huge.sent.length, MAX_BACKFILL_LIMIT);
 });
+
+test('excluded slugs (e.g. test jobs) are never submitted', async () => {
+  const { summary, sent } = await run([job('a'), job('test')], new Map(), { excludeSlugs: ['role-test-jobs-in-coimbatore-acme'] });
+  assert.deepEqual(sent, ['https://coimbatorejobs.in/job/role-a-jobs-in-coimbatore-acme']);
+  assert.equal(summary.excluded, 1);
+});
